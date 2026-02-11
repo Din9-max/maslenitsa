@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Блинный Шутер: Небеса и Жизни</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            height: 100vh; 
+            width: 100vw;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #87CEEB;
+        }
+
+        /* --- Анимация облаков --- */
+        .sky-background {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            background: linear-gradient(180deg, #2980b9 0%, #6dd5fa 100%);
+            overflow: hidden;
+        }
+        .cloud {
+            position: absolute; background: rgba(255, 255, 255, 0.6); border-radius: 50px;
+            animation: floatClouds linear infinite;
+        }
+        .cloud::after, .cloud::before { content: ''; position: absolute; background: inherit; border-radius: 50%; }
+        .c1 { width: 120px; height: 60px; top: 10%; left: -120px; animation-duration: 25s; }
+        .c1::after { width: 50px; height: 50px; top: -25px; left: 20px; }
+        .c1::before { width: 40px; height: 40px; top: -15px; left: 60px; }
+        .c2 { width: 100px; height: 50px; top: 30%; left: -100px; animation-duration: 35s; animation-delay: 5s; opacity: 0.8; }
+        .c2::after { width: 40px; height: 40px; top: -20px; left: 15px; }
+        .c3 { width: 160px; height: 70px; top: 60%; left: -160px; animation-duration: 45s; animation-delay: 2s; opacity: 0.5; }
+        .c3::after { width: 70px; height: 70px; top: -35px; left: 25px; }
+        @keyframes floatClouds { 0% { transform: translateX(0); } 100% { transform: translateX(120vw); } }
+
+        /* --- Основной контейнер --- */
+        .game-wrapper {
+            position: relative; width: 100%; height: 100%; max-width: 600px; margin: 0 auto;
+            display: flex; flex-direction: column;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255,255,255,0.3); border-right: 1px solid rgba(255,255,255,0.3);
+        }
+
+        /* --- Шапка --- */
+        .header {
+            flex: 0 0 auto; height: 90px;
+            background: rgba(255, 255, 255, 0.9);
+            border-bottom: 4px solid #ff9800;
+            display: flex; justify-content: space-around; align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15); z-index: 20;
+            margin-bottom: 5px; padding: 0 10px;
+        }
+
+        .stat-item { display: flex; flex-direction: column; align-items: center; }
+        .stat-label { font-size: 10px; color: #7f8c8d; text-transform: uppercase; font-weight: 700; margin-bottom: 3px; }
+        .stat-value { font-size: 24px; font-weight: 900; color: #d35400; }
+
+        /* Индикатор жизней */
+        .lives-row { display: flex; gap: 5px; }
+        .life-dot {
+            width: 12px; height: 12px; background: #4CAF50; border-radius: 50%;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); transition: all 0.3s;
+        }
+        .life-dot.lost { background: #e0e0e0; transform: scale(0.8); }
+
+        /* --- Игровое поле --- */
+        .canvas-container {
+            flex: 1; position: relative; width: 100%; overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* --- Модальное окно --- */
+        .modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100; backdrop-filter: blur(4px); transition: opacity 0.3s;
+        }
+        .hidden { display: none !important; }
+        .modal-content {
+            background: white; padding: 40px; border-radius: 20px; text-align: center;
+            border: 5px solid #ff9800; box-shadow: 0 20px 50px rgba(0,0,0,0.3); max-width: 80%;
+        }
+        h1 { color: #e65100; font-size: 28px; margin-bottom: 10px; text-transform: uppercase; }
+        p { color: #555; font-size: 16px; margin-bottom: 25px; line-height: 1.4; }
+        button {
+            background: linear-gradient(90deg, #ff9800, #f57c00); border: none; color: white; padding: 15px 40px; 
+            font-size: 20px; border-radius: 50px; font-weight: bold; cursor: pointer; box-shadow: 0 5px 15px rgba(230, 81, 0, 0.3);
+        }
+        button:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <div class="sky-background">
+        <div class="cloud c1"></div>
+        <div class="cloud c2"></div>
+        <div class="cloud c3"></div>
+    </div>
+
+    <div class="game-wrapper">
+        <div class="header">
+            <div class="stat-item">
+                <span class="stat-label">Счет</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            
+            <div class="stat-item">
+                <span class="stat-label">До сдвига</span>
+                <div class="lives-row" id="lives-container">
+                    </div>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-label">Рекорд</span>
+                <span class="stat-value" id="high-score">0</span>
+            </div>
+        </div>
+
+        <div class="canvas-container" id="canvas-container">
+            <canvas id="gameCanvas"></canvas>
+            
+            <div id="modal" class="modal">
+                <div class="modal-content">
+                    <h1 id="modal-title">Масленица</h1>
+                    <p id="modal-desc">Не промахивайся!<br>5 ошибок — и потолок опускается.</p>
+                    <button id="action-btn">НАЧАТЬ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const container = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        
+        // --- Константы ---
+        const RADIUS = 19; 
+        const DIAMETER = RADIUS * 2;
+        const SPEED = 28; 
+        const MAX_LIVES = 5; // Лимит промахов
+        
+        const COLORS = [
+            { start: '#FFECB3', end: '#FFB300', t: '🍯' }, 
+            { start: '#F8BBD0', end: '#E91E63', t: '🍓' }, 
+            { start: '#F5F5F5', end: '#BDBDBD', t: '🥛' }, 
+            { start: '#D7CCC8', end: '#5D4037', t: '🍫' }, 
+            { start: '#FFCCBC', end: '#D84315', t: '🥩' }  
+        ];
+        const BOMB_TYPE = 99;
+
+        // --- Состояние ---
+        let grid = [];
+        let particles = [];
+        let falling = [];
+        let rows = 0, cols = 0, offsetX = 0;
+        
+        let score = 0;
+        let lives = MAX_LIVES;
+        let highScore = localStorage.getItem('blini_hs_lives') || 0;
+        let state = 'MENU'; 
+        
+        let shooter = { x: 0, y: 0, curr: 0, next: 0, ball: null };
+        let isAiming = false;
+        let aimAngle = -Math.PI / 2;
+
+        // --- Инициализация ---
+        function resize() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            cols = Math.floor(canvas.width / DIAMETER);
+            offsetX = (canvas.width - cols * DIAMETER) / 2;
+            rows = Math.floor(canvas.height / DIAMETER) + 2;
+            shooter.x = canvas.width / 2;
+            shooter.y = canvas.height - 60;
+        }
+
+        function initGame() {
+            resize();
+            score = 0;
+            lives = MAX_LIVES;
+            state = 'PLAYING';
+            
+            grid = []; particles = []; falling = [];
+            for(let r=0; r<rows; r++) grid[r] = new Array(cols).fill(null);
+            for(let r=0; r<5; r++) createRow(r);
+
+            shooter.curr = randType();
+            shooter.next = randType();
+            shooter.ball = null;
+            
+            updateUI();
+            toggleModal(false);
+            loop();
+        }
+
+        function createRow(r) {
+            for(let c=0; c<cols; c++) {
+                if(Math.random() > 0.1) addBall(r, c);
+            }
+        }
+
+        function addBall(r, c, type = null) {
+            let t = type !== null ? type : (Math.random() < 0.05 ? BOMB_TYPE : randType());
+            grid[r][c] = {
+                type: t,
+                x: offsetX + c * DIAMETER + RADIUS,
+                y: r * DIAMETER + RADIUS,
+                active: true
+            };
+        }
+
+        function randType() { return Math.floor(Math.random() * COLORS.length); }
+
+        // --- Логика ---
+        function update() {
+            if (state !== 'PLAYING') return;
+
+            // Полет шара
+            if (shooter.ball) {
+                let b = shooter.ball;
+                for(let i=0; i<6; i++) {
+                    b.x += b.vx / 6; b.y += b.vy / 6;
+                    if(b.x < RADIUS) { b.x = RADIUS; b.vx *= -1; }
+                    if(b.x > canvas.width - RADIUS) { b.x = canvas.width - RADIUS; b.vx *= -1; }
+                    
+                    if(b.y < RADIUS) { b.y = RADIUS; snap(b); return; }
+                    if(checkCollision(b)) return;
+                }
+                if(b.y > canvas.height + 50) resetShot();
+            }
+
+            // Частицы
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                p.life -= 0.02; p.vy += 0.2;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Падающие
+            for (let i = falling.length - 1; i >= 0; i--) {
+                let f = falling[i];
+                f.x += f.vx; f.y += f.vy;
+                f.vy += 0.8; f.rot += f.rotSpd;
+                if (f.x < RADIUS || f.x > canvas.width - RADIUS) f.vx *= -0.6;
+                if (f.y > canvas.height + RADIUS) falling.splice(i, 1);
+            }
+        }
+
+        function checkCollision(b) {
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    let cell = grid[r][c];
+                    if(cell) {
+                        let distSq = (b.x - cell.x)**2 + (b.y - cell.y)**2;
+                        if(distSq < (DIAMETER*0.9)**2) {
+                            snap(b);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function snap(b) {
+            let c = Math.round((b.x - offsetX - RADIUS) / DIAMETER);
+            let r = Math.round((b.y - RADIUS) / DIAMETER);
+            c = Math.max(0, Math.min(c, cols-1));
+            r = Math.max(0, Math.min(r, rows-1));
+            
+            if(grid[r][c]) {
+                let neighbors = getNeighbors(r, c);
+                let best = null, minDist = Infinity;
+                for(let n of neighbors) {
+                    if(!grid[n.r][n.c]) {
+                        let nx = offsetX + n.c * DIAMETER + RADIUS;
+                        let ny = n.r * DIAMETER + RADIUS;
+                        let dist = (b.x-nx)**2 + (b.y-ny)**2;
+                        if(dist < minDist) { minDist = dist; best = n; }
+                    }
+                }
+                if(best) { r = best.r; c = best.c; }
+                else r += 1;
+            }
+            
+            if(r < rows) {
+                addBall(r, c, b.type);
+                
+                // Проверки
+                let bombTriggered = checkBomb(r, c);
+                if (!bombTriggered) {
+                    let matched = checkMatches(r, c, b.type);
+                    if (!matched) {
+                        // ПРОМАХ!
+                        handleMiss();
+                    }
+                }
+            }
+            resetShot();
+        }
+
+        function handleMiss() {
+            lives--;
+            if (lives <= 0) {
+                addNewRow();
+                lives = MAX_LIVES;
+            }
+            updateUI(); // Обновляем точки
+        }
+
+        function addNewRow() {
+            // Сдвигаем все вниз
+            for(let r = rows - 2; r >= 0; r--) {
+                grid[r+1] = grid[r] ? [...grid[r]] : new Array(cols).fill(null);
+                for(let c=0; c<cols; c++) {
+                    if(grid[r+1][c]) grid[r+1][c].y = (r+1) * DIAMETER + RADIUS;
+                }
+            }
+            // Новый ряд
+            grid[0] = new Array(cols).fill(null);
+            createRow(0);
+        }
+
+        function checkBomb(r, c) {
+            let neighbors = getNeighbors(r, c);
+            let exploded = false;
+            for(let n of neighbors) {
+                if(grid[n.r][n.c] && grid[n.r][n.c].type === BOMB_TYPE) {
+                    explode(n.r, n.c);
+                    exploded = true;
+                }
+            }
+            return exploded;
+        }
+
+        function explode(cr, cc) {
+            let range = 2;
+            for(let r = Math.max(0, cr-range); r <= Math.min(rows-1, cr+range); r++) {
+                for(let c = Math.max(0, cc-range); c <= Math.min(cols-1, cc+range); c++) {
+                    if(grid[r][c]) {
+                        if((r-cr)**2 + (c-cc)**2 <= range**2) {
+                            let cell = grid[r][c];
+                            spawnParticles(cell.x, cell.y, cell.type === BOMB_TYPE ? '#333' : COLORS[cell.type].end);
+                            grid[r][c] = null;
+                            score += 30;
+                        }
+                    }
+                }
+            }
+            dropFloating();
+        }
+
+        function checkMatches(r, c, type) {
+            let match = getMatches(r, c, type, []);
+            if(match.length >= 3) {
+                match.forEach(m => {
+                    let cell = grid[m.r][m.c];
+                    spawnParticles(cell.x, cell.y, COLORS[cell.type].end);
+                    grid[m.r][m.c] = null;
+                });
+                score += match.length * 100;
+                dropFloating();
+                return true;
+            }
+            return false;
+        }
+
+        function dropFloating() {
+            let active = new Set();
+            for(let c=0; c<cols; c++) if(grid[0][c]) mark(0, c, active);
+            
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    if(grid[r][c] && !active.has(r+","+c)) {
+                        let cell = grid[r][c];
+                        falling.push({
+                            x: cell.x, y: cell.y, type: cell.type,
+                            vx: (Math.random()-0.5)*5, vy: -3,
+                            rot: 0, rotSpd: (Math.random()-0.5)*0.2
+                        });
+                        grid[r][c] = null;
+                        score += 50;
+                    }
+                }
+            }
+        }
+
+        function mark(r, c, set) {
+            let key = r+","+c;
+            if(set.has(key)) return;
+            set.add(key);
+            let ns = getNeighbors(r, c);
+            for(let n of ns) if(grid[n.r][n.c]) mark(n.r, n.c, set);
+        }
+
+        function getMatches(r, c, type, visited) {
+            let key = r+","+c;
+            if(visited.includes(key)) return [];
+            visited.push(key);
+            let res = [{r, c}];
+            let ns = getNeighbors(r, c);
+            for(let n of ns) {
+                if(grid[n.r][n.c] && grid[n.r][n.c].type === type) {
+                    res = res.concat(getMatches(n.r, n.c, type, visited));
+                }
+            }
+            return res;
+        }
+
+        function getNeighbors(r, c) {
+            return [{r:r, c:c-1}, {r:r, c:c+1}, {r:r-1, c:c}, {r:r+1, c:c}]
+                .filter(n => n.r>=0 && n.r<rows && n.c>=0 && n.c<cols);
+        }
+
+        function spawnParticles(x, y, color) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
+                    life: 1.0, color: color, size: Math.random()*5+2
+                });
+            }
+        }
+
+        function resetShot() {
+            shooter.ball = null;
+            shooter.curr = shooter.next;
+            shooter.next = randType();
+            updateUI();
+            checkEnd();
+        }
+
+        function checkEnd() {
+            let low = Math.floor((shooter.y - RADIUS*2.5)/DIAMETER);
+            for(let r=low; r<rows; r++) {
+                for(let c=0; c<cols; c++) if(grid[r][c]) return endGame();
+            }
+        }
+
+        function endGame() {
+            state = 'END';
+            if(score > highScore) {
+                highScore = score;
+                localStorage.setItem('blini_hs_lives', highScore);
+            }
+            document.getElementById('modal-title').innerText = "КОНЕЦ ИГРЫ";
+            document.getElementById('modal-desc').innerHTML = `Счет: ${score}<br>Рекорд: ${highScore}`;
+            document.getElementById('action-btn').innerText = "ЗАНОВО";
+            toggleModal(true);
+        }
+
+        // --- Ввод ---
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        canvas.addEventListener('pointerdown', e => { if(state!=='PLAYING'||shooter.ball)return; isAiming=true; updateAim(getPos(e)); });
+        canvas.addEventListener('pointermove', e => { if(isAiming) updateAim(getPos(e)); });
+        canvas.addEventListener('pointerup', () => { if(isAiming) { isAiming=false; fire(); } });
+
+        function updateAim(pos) {
+            let dx = pos.x - shooter.x; let dy = pos.y - shooter.y;
+            if(dy > -20) dy = -20;
+            aimAngle = Math.atan2(dy, dx);
+        }
+        function fire() {
+            shooter.ball = {
+                x: shooter.x, y: shooter.y,
+                vx: Math.cos(aimAngle)*SPEED, vy: Math.sin(aimAngle)*SPEED, type: shooter.curr
+            };
+        }
+
+        // --- UI & Render ---
+        const uiScore = document.getElementById('score');
+        const uiHigh = document.getElementById('high-score');
+        const uiLives = document.getElementById('lives-container');
+        const modal = document.getElementById('modal');
+        const btn = document.getElementById('action-btn');
+
+        function updateUI() {
+            uiScore.innerText = score;
+            uiHigh.innerText = highScore;
+            
+            uiLives.innerHTML = '';
+            for(let i=0; i<MAX_LIVES; i++) {
+                let d = document.createElement('div');
+                d.className = `life-dot ${i < lives ? '' : 'lost'}`;
+                uiLives.appendChild(d);
+            }
+        }
+
+        function toggleModal(show) {
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+        btn.onclick = initGame;
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    if(grid[r][c]) drawBall(grid[r][c].x, grid[r][c].y, grid[r][c].type);
+                }
+            }
+            
+            for(let f of falling) {
+                ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+                drawBall(0, 0, f.type); ctx.restore();
+            }
+
+            for(let p of particles) {
+                ctx.globalAlpha = p.life; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fillStyle = p.color; ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            if(isAiming && !shooter.ball) {
+                ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 87, 34, 0.6)'; ctx.lineWidth = 4; ctx.setLineDash([8, 10]);
+                let sx = shooter.x, sy = shooter.y;
+                let svx = Math.cos(aimAngle)*20, svy = Math.sin(aimAngle)*20;
+                ctx.moveTo(sx, sy);
+                for(let k=0; k<30; k++) {
+                    sx += svx; sy += svy;
+                    if(sx < RADIUS || sx > canvas.width-RADIUS) {
+                        svx *= -1; sx = sx<RADIUS?RADIUS:canvas.width-RADIUS;
+                        ctx.lineTo(sx, sy);
+                    }
+                    if(sy < RADIUS) break;
+                }
+                ctx.lineTo(sx, sy); ctx.stroke(); ctx.setLineDash([]);
+                ctx.beginPath(); ctx.arc(sx, sy, 6, 0, Math.PI*2); ctx.fillStyle = '#ff5722'; ctx.fill();
+            }
+
+            if(shooter.ball) drawBall(shooter.ball.x, shooter.ball.y, shooter.ball.type);
+            else {
+                drawBall(shooter.x, shooter.y, shooter.curr);
+                ctx.save(); ctx.translate(shooter.x + 50, shooter.y + 10); ctx.globalAlpha = 0.8;
+                drawBall(0, 0, shooter.next, RADIUS*0.7); ctx.restore();
+            }
+        }
+
+        function drawBall(x, y, type, r=RADIUS) {
+            if(type === BOMB_TYPE) {
+                let grad = ctx.createRadialGradient(x-r*0.3, y-r*0.3, r*0.2, x, y, r);
+                grad.addColorStop(0, '#666'); grad.addColorStop(1, '#000');
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = grad; ctx.fill();
+                ctx.beginPath(); ctx.moveTo(x, y-r); ctx.quadraticCurveTo(x+5, y-r-8, x+8, y-r-4);
+                ctx.strokeStyle = '#8D6E63'; ctx.lineWidth=3; ctx.stroke();
+                ctx.beginPath(); ctx.arc(x+8, y-r-4, 3, 0, Math.PI*2); ctx.fillStyle = '#FFEB3B'; ctx.fill();
+                ctx.font = `${r}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'red'; ctx.fillText('💣', x, y+2);
+                return;
+            }
+            let c = COLORS[type];
+            let grad = ctx.createRadialGradient(x-r*0.3, y-r*0.3, r*0.1, x, y, r);
+            grad.addColorStop(0, c.start); grad.addColorStop(1, c.end);
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = grad; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y+r, r*0.8, 0, Math.PI*2); ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.fill();
+            ctx.font = `${r*1.1}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = "rgba(0,0,0,0.2)"; ctx.shadowBlur = 3;
+            ctx.fillStyle = '#fff'; ctx.fillText(c.t, x, y+r*0.1); ctx.shadowBlur = 0;
+        }
+
+        function loop() { update(); draw(); requestAnimationFrame(loop); }
+        window.onresize = resize;
+        toggleModal(true);
+    </script>
+</body>
+</html>
