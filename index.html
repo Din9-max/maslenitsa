@@ -324,649 +324,454 @@
     </div>
 
     <script>
-        (function(){
-            // === НАСТРОЙКИ МОБИЛЬНОЙ ВЕРСИИ ===
-            const canvas = document.getElementById('gameCanvas');
-            const container = document.getElementById('canvas-container');
-            const ctx = canvas.getContext('2d', { alpha: false }); // Оптимизация рендера
+    (function(){
+        // === ИНИЦИАЛИЗАЦИЯ ===
+        const canvas = document.getElementById('gameCanvas');
+        const container = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d', { alpha: false });
 
-            // Переменные теперь динамические (зависят от размера экрана)
-            let RADIUS, DIAMETER, SPEED;
-            const COLUMNS_MOBILE = 9;  // Кол-во блинов в ширину на телефоне
-            const MAX_LIVES = 5;
+        // Переменные
+        let RADIUS, DIAMETER, SPEED;
+        const COLUMNS_MOBILE = 9;  
+        const MAX_LIVES = 5;
 
-            // Изображения
-            const PANCAKE_IMAGES = ['honey.png', 'Strawberry.png', 'milk.png', 'cheese.png', 'meat.png'];
-            const BOMB_IMAGE = 'bomb.png';
-            
-            // Настройки цветов (fallback если картинки нет)
-            const PANCAKE_TYPES = [
-                { color: '#FFC107', border: '#FF6F00' }, // Мёд
-                { color: '#FF5252', border: '#B71C1C' }, // Ягоды
-                { color: '#FFF59D', border: '#FBC02D' }, // Сгущенка
-                { color: '#FFEB3B', border: '#F57F17' }, // Сыр
-                { color: '#A1887F', border: '#5D4037' }  // Мясо
-            ];
-            const BOMB_TYPE = 99;
+        // Изображения
+        const PANCAKE_IMAGES = ['honey.png', 'Strawberry.png', 'milk.png', 'cheese.png', 'meat.png'];
+        const BOMB_IMAGE = 'bomb.png';
+        
+        // Цвета (резерв)
+        const PANCAKE_TYPES = [
+            { color: '#FFC107', border: '#FF6F00' },
+            { color: '#FF5252', border: '#B71C1C' },
+            { color: '#FFF59D', border: '#FBC02D' },
+            { color: '#FFEB3B', border: '#F57F17' },
+            { color: '#A1887F', border: '#5D4037' }
+        ];
+        const BOMB_TYPE = 99;
 
-            // Загрузка ресурсов
-            let pancakeImgs = [];
-            let bombImg = new Image();
-            bombImg.src = BOMB_IMAGE;
-            
-            PANCAKE_IMAGES.forEach(src => {
-                let img = new Image();
-                img.src = src;
-                pancakeImgs.push(img);
-            });
+        // Загрузка
+        let pancakeImgs = [];
+        let bombImg = new Image();
+        bombImg.src = BOMB_IMAGE;
+        PANCAKE_IMAGES.forEach(src => { let img = new Image(); img.src = src; pancakeImgs.push(img); });
 
-            // Состояние игры
-            let grid = [], particles = [], falling = [];
-            let rows = 0, cols = 0, offsetX = 0;
-            let score = 0, lives = MAX_LIVES, highScore = localStorage.getItem('blini_hs') || 0;
-            let state = 'MENU';
-            let shooter = { x: 0, y: 0, curr: 0, next: 0, ball: null };
-            
-            // Управление
-            let isAiming = false;
-            let aimAngle = -Math.PI / 2;
-            let soundEnabled = true;
+        // Состояние
+        let grid = [], particles = [], falling = [];
+        let rows = 0, cols = 0, offsetX = 0;
+        let score = 0, lives = MAX_LIVES, highScore = localStorage.getItem('blini_hs') || 0;
+        let state = 'MENU';
+        let shooter = { x: 0, y: 0, curr: 0, next: 0, ball: null };
+        
+        let isAiming = false;
+        let aimAngle = -Math.PI / 2;
+        let soundEnabled = true;
 
-            // === АДАПТИВНОСТЬ ===
-            function resize() {
-                const rect = container.getBoundingClientRect();
-                canvas.width = rect.width;
-                canvas.height = rect.height;
+        // === ЗВУК (Фикс для iOS) ===
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
 
-                // !ГЛАВНОЕ ИЗМЕНЕНИЕ!: Рассчитываем размер блина от ширины экрана
-                // На мобильном хотим ~9 столбцов. На десктопе может быть больше.
-                cols = COLUMNS_MOBILE; 
-                DIAMETER = Math.floor(canvas.width / cols);
-                RADIUS = DIAMETER / 2;
-                
-                // Пересчитываем отступы, чтобы было по центру
-                offsetX = (canvas.width - cols * DIAMETER) / 2;
-                rows = Math.floor(canvas.height / DIAMETER) + 1;
-                
-                // Скорость полета тоже зависит от размера экрана
-                SPEED = canvas.height * 0.035; // Пролетает экран за ~30 кадров
-
-                shooter.x = canvas.width / 2;
-                shooter.y = canvas.height - RADIUS * 2.5;
+        function tryResumeAudio() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
             }
-
-            // === ЗВУКОВОЙ ДВИЖОК (Web Audio API) ===
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            function playTone(freq, type, duration, vol=0.1) {
-                if (!soundEnabled || audioCtx.state === 'suspended') {
-                    audioCtx.resume().catch(()=>{});
-                    if(!soundEnabled) return;
-                }
+        }
+        
+        function playTone(freq, type, duration) {
+            if (!soundEnabled) return;
+            try {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = type;
                 osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
                 gain.gain.exponentialRampToValue(0.01, audioCtx.currentTime + duration);
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 osc.start();
                 osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        const sounds = {
+            shoot: () => playTone(600, 'sine', 0.15),
+            pop: () => playTone(400, 'sine', 0.1),
+            bomb: () => playTone(100, 'sawtooth', 0.3),
+            miss: () => playTone(150, 'triangle', 0.3)
+        };
+
+        // === РАЗМЕРЫ ===
+        function resize() {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            cols = COLUMNS_MOBILE; 
+            DIAMETER = Math.floor(canvas.width / cols);
+            RADIUS = DIAMETER / 2;
+            offsetX = (canvas.width - cols * DIAMETER) / 2;
+            rows = Math.floor(canvas.height / DIAMETER) + 1;
+            SPEED = canvas.height * 0.035; 
+
+            shooter.x = canvas.width / 2;
+            shooter.y = canvas.height - RADIUS * 2.5;
+        }
+
+        // === ЛОГИКА ===
+        function initGame() {
+            tryResumeAudio();
+            resize();
+            score = 0; lives = MAX_LIVES; state = 'PLAYING';
+            grid = []; particles = []; falling = [];
+            for (let r = 0; r < rows; r++) grid[r] = new Array(cols).fill(null);
+            for (let r = 0; r < 5; r++) createRow(r);
+
+            shooter.curr = randType();
+            shooter.next = randType();
+            shooter.ball = null;
+            
+            updateUI();
+            toggleModal('modal', false);
+            toggleModal('pauseModal', false);
+        }
+
+        function createRow(r) {
+            for (let c = 0; c < cols; c++) {
+                if (Math.random() > 0.3) addBall(r, c, Math.random() < 0.05 ? BOMB_TYPE : randType());
             }
+        }
 
-            const sounds = {
-                shoot: () => playTone(600, 'sine', 0.15, 0.1),
-                pop: () => playTone(400, 'sine', 0.1, 0.1),
-                bomb: () => playTone(100, 'sawtooth', 0.3, 0.2),
-                miss: () => playTone(150, 'triangle', 0.3, 0.1)
-            };
+        function addBall(r, c, type) {
+            if (!grid[r]) return;
+            grid[r][c] = { type: type, x: offsetX + c * DIAMETER + RADIUS, y: r * DIAMETER + RADIUS };
+        }
 
-            // === ЛОГИКА ИГРЫ ===
-            function initGame() {
-                resize();
-                score = 0;
-                lives = MAX_LIVES;
-                state = 'PLAYING';
-                grid = []; particles = []; falling = [];
-                
-                // Создаем сетку
-                for (let r = 0; r < rows; r++) grid[r] = new Array(cols).fill(null);
-                // Заполняем 5 рядов
-                for (let r = 0; r < 5; r++) createRow(r);
+        function randType() { return Math.floor(Math.random() * PANCAKE_IMAGES.length); }
 
-                shooter.curr = randType();
-                shooter.next = randType();
-                shooter.ball = null;
-                
-                updateUI();
-                toggleModal('modal', false);
-                toggleModal('pauseModal', false);
-                
-                // Пытаемся разблокировать аудио контекст при старте
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-            }
+        function update() {
+            if (state !== 'PLAYING') return;
 
-            function createRow(r) {
-                for (let c = 0; c < cols; c++) {
-                    // Шахматный порядок для плотной упаковки (упрощено для грида) или рандом
-                    if (Math.random() > 0.3) { // Вероятность появления блина
-                        addBall(r, c, Math.random() < 0.05 ? BOMB_TYPE : randType());
-                    }
-                }
-            }
+            // Шар
+            if (shooter.ball) {
+                let b = shooter.ball;
+                const steps = 6; // Больше шагов для точности
+                for (let i = 0; i < steps; i++) {
+                    b.x += b.vx / steps;
+                    b.y += b.vy / steps;
 
-            function addBall(r, c, type) {
-                if (!grid[r]) return;
-                grid[r][c] = {
-                    type: type,
-                    x: offsetX + c * DIAMETER + RADIUS,
-                    y: r * DIAMETER + RADIUS,
-                    targetY: r * DIAMETER + RADIUS // Для анимации падения ряда (опционально)
-                };
-            }
-
-            function randType() { return Math.floor(Math.random() * PANCAKE_IMAGES.length); }
-
-            function update() {
-                if (state !== 'PLAYING') return;
-
-                // Шар летит
-                if (shooter.ball) {
-                    let b = shooter.ball;
-                    // Двигаем несколькими мелкими шагами для точности (Raycasting "для бедных")
-                    const steps = 5;
-                    for (let i = 0; i < steps; i++) {
-                        b.x += b.vx / steps;
-                        b.y += b.vy / steps;
-
-                        // Стенки
-                        if (b.x < RADIUS) { b.x = RADIUS; b.vx *= -1; }
-                        if (b.x > canvas.width - RADIUS) { b.x = canvas.width - RADIUS; b.vx *= -1; }
-                        
-                        // Потолок
-                        if (b.y < RADIUS) {
-                            b.y = RADIUS;
-                            snapBall(b);
-                            return;
-                        }
-                        
-                        // Столкновение
-                        if (checkCollision(b)) return;
-                    }
-                    if (b.y > canvas.height + RADIUS) resetShot(); // Улетел вниз
-                }
-
-                // Анимация частиц
-                particles.forEach((p, i) => {
-                    p.x += p.vx; p.y += p.vy; p.life -= 0.03; p.vy += 0.5;
-                    if (p.life <= 0) particles.splice(i, 1);
-                });
-
-                // Падающие блины
-                falling.forEach((f, i) => {
-                    f.x += f.vx; f.y += f.vy; f.vy += 0.8; f.rot += f.rotSpd;
-                    if (f.y > canvas.height + DIAMETER) falling.splice(i, 1);
-                });
-            }
-
-            function checkCollision(b) {
-                // Простая проверка дистанции до всех блинов
-                // Оптимизация: проверяем только соседние клетки
-                let startR = Math.floor((b.y - RADIUS) / DIAMETER) - 1;
-                let endR = startR + 3;
-                
-                for (let r = Math.max(0, startR); r < Math.min(rows, endR); r++) {
-                    for (let c = 0; c < cols; c++) {
-                        let cell = grid[r][c];
-                        if (cell) {
-                            let distSq = (b.x - cell.x)**2 + (b.y - cell.y)**2;
-                            if (distSq < (DIAMETER * 0.85)**2) { // 0.85 - чуть меньше диаметра для мягкого касания
-                                snapBall(b);
-                                return true;
-                            }
-                        }
-                    }
-                }
-                return false;
-            }
-
-            function snapBall(b) {
-                // Находим ближайшую свободную ячейку
-                let c = Math.round((b.x - offsetX - RADIUS) / DIAMETER);
-                let r = Math.round((b.y - RADIUS) / DIAMETER);
-                
-                // Коррекция границ
-                c = Math.max(0, Math.min(c, cols - 1));
-                r = Math.max(0, Math.min(r, rows - 1));
-
-                // Если занято, ищем соседа (очень простой алгоритм, можно улучшить)
-                if (grid[r] && grid[r][c]) {
-                     r++; // Просто ставим ниже, если попали прямо в блин
-                }
-                
-                if (r >= rows) return endGame(); // Слишком низко
-
-                // Добавляем
-                if (!grid[r]) grid[r] = new Array(cols).fill(null);
-                addBall(r, c, b.type);
-                
-                // Логика взрывов и совпадений
-                let hitBomb = false;
-                let neighbors = getNeighbors(r, c);
-                // Проверка на взрыв бомбы рядом
-                neighbors.forEach(n => {
-                    if (grid[n.r][n.c].type === BOMB_TYPE) { explode(n.r, n.c); hitBomb = true; }
-                });
-
-                if (!hitBomb) {
-                    if (b.type === BOMB_TYPE) {
-                        explode(r, c);
-                    } else {
-                        let matches = findMatches(r, c, b.type, []);
-                        if (matches.length >= 3) {
-                            sounds.pop();
-                            removeBalls(matches);
-                            score += matches.length * 10;
-                            checkFloating();
-                        } else {
-                            sounds.miss();
-                            lives--;
-                            if (lives <= 0) {
-                                addRow();
-                                lives = MAX_LIVES;
-                            }
-                        }
-                    }
-                }
-                
-                resetShot();
-                updateUI();
-                checkLose();
-            }
-
-            function findMatches(r, c, type, visited) {
-                let key = r + ',' + c;
-                if (visited.includes(key)) return [];
-                visited.push(key);
-                
-                let matches = [{r,c}];
-                let neighbors = getNeighbors(r, c);
-                
-                neighbors.forEach(n => {
-                    if (grid[n.r][n.c].type === type) {
-                        matches = matches.concat(findMatches(n.r, n.c, type, visited));
-                    }
-                });
-                return matches;
-            }
-
-            function getNeighbors(r, c) {
-                let dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-                let res = [];
-                dirs.forEach(d => {
-                    let nr = r + d[0], nc = c + d[1];
-                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr] && grid[nr][nc]) {
-                        res.push({r: nr, c: nc});
-                    }
-                });
-                return res;
-            }
-
-            function removeBalls(list) {
-                list.forEach(p => {
-                    if (grid[p.r][p.c]) {
-                        createParticles(grid[p.r][p.c].x, grid[p.r][p.c].y, grid[p.r][p.c].type);
-                        grid[p.r][p.c] = null;
-                    }
-                });
-            }
-
-            function explode(r, c) {
-                sounds.bomb();
-                let range = 2; // Радиус взрыва
-                for (let i = r - range; i <= r + range; i++) {
-                    for (let j = c - range; j <= c + range; j++) {
-                        if (i >= 0 && i < rows && j >= 0 && j < cols && grid[i] && grid[i][j]) {
-                             createParticles(grid[i][j].x, grid[i][j].y, BOMB_TYPE);
-                             grid[i][j] = null;
-                             score += 5;
-                        }
-                    }
-                }
-                checkFloating();
-            }
-
-            function checkFloating() {
-                // BFS от потолка. Все, что не соединено с r=0, падает.
-                let connected = new Set();
-                let queue = [];
-                
-                // Добавляем первый ряд
-                if (grid[0]) {
-                    for (let c = 0; c < cols; c++) {
-                        if (grid[0][c]) {
-                            let key = '0,' + c;
-                            connected.add(key);
-                            queue.push({r:0, c:c});
-                        }
-                    }
-                }
-
-                while(queue.length > 0) {
-                    let curr = queue.shift();
-                    let ns = getNeighbors(curr.r, curr.c);
-                    ns.forEach(n => {
-                        let key = n.r + ',' + n.c;
-                        if (!connected.has(key)) {
-                            connected.add(key);
-                            queue.push(n);
-                        }
-                    });
-                }
-
-                // Все что не в connected - падает
-                for (let r = 0; r < rows; r++) {
-                    for (let c = 0; c < cols; c++) {
-                        if (grid[r][c] && !connected.has(r + ',' + c)) {
-                            let cell = grid[r][c];
-                            falling.push({
-                                x: cell.x, y: cell.y, type: cell.type,
-                                vx: (Math.random()-0.5)*10, vy: -5, rot: 0, rotSpd: (Math.random()-0.5)*0.2
-                            });
-                            grid[r][c] = null;
-                            score += 20;
-                        }
-                    }
-                }
-            }
-
-            function addRow() {
-                // Сдвигаем вниз
-                for (let r = rows - 2; r >= 0; r--) {
-                    grid[r+1] = grid[r];
-                    // Обновляем координаты Y
-                    if (grid[r+1]) {
-                        for(let c=0; c<cols; c++) {
-                            if(grid[r+1][c]) grid[r+1][c].y += DIAMETER;
-                        }
-                    }
-                }
-                // Новый ряд сверху
-                grid[0] = new Array(cols).fill(null);
-                for (let c = 0; c < cols; c++) {
-                    if(Math.random() > 0.2) addBall(0, c, Math.random()<0.05?BOMB_TYPE:randType());
-                }
-            }
-
-            function createParticles(x, y, type) {
-                let color = type === BOMB_TYPE ? '#333' : PANCAKE_TYPES[type].color;
-                for(let i=0; i<8; i++) {
-                    particles.push({
-                        x: x, y: y,
-                        vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                        life: 1, color: color
-                    });
-                }
-            }
-
-            function resetShot() {
-                shooter.ball = null;
-                shooter.curr = shooter.next;
-                shooter.next = randType();
-            }
-
-            function checkLose() {
-                // Если блины слишком низко
-                for(let c=0; c<cols; c++) {
-                    // Проверяем ряд близко к стрелку
-                    let dangerRow = Math.floor((shooter.y - RADIUS * 2) / DIAMETER);
-                    if (grid[dangerRow] && grid[dangerRow][c]) {
-                        endGame();
-                        return;
-                    }
-                }
-            }
-
-            function endGame() {
-                state = 'END';
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('blini_hs', highScore);
-                }
-                document.getElementById('modal-title').innerText = "ИГРА ОКОНЧЕНА";
-                document.getElementById('modal-desc').innerHTML = `Счет: ${score}<br>Рекорд: ${highScore}`;
-                document.getElementById('flavors-section').style.display = 'none';
-                document.getElementById('action-btn').innerText = "ПОПРОБОВАТЬ СНОВА";
-                toggleModal('modal', true);
-            }
-
-            // === ОТРИСОВКА ===
-            function draw() {
-                // Очистка с учетом dvh (фон CSS, тут чистим canvas)
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Рисуем сетку
-                for (let r = 0; r < rows; r++) {
-                    for (let c = 0; c < cols; c++) {
-                        if (grid[r] && grid[r][c]) drawPancake(grid[r][c].x, grid[r][c].y, grid[r][c].type);
-                    }
-                }
-
-                // Рисуем падающие
-                falling.forEach(f => {
-                    ctx.save();
-                    ctx.translate(f.x, f.y);
-                    ctx.rotate(f.rot);
-                    drawPancake(0, 0, f.type);
-                    ctx.restore();
-                });
-
-                // Рисуем частицы
-                particles.forEach(p => {
-                    ctx.globalAlpha = p.life;
-                    ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, RADIUS/3, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
-                });
-
-                // Стрелок
-                if (state !== 'MENU') {
-                    // Линия прицела
-                    if (isAiming && !shooter.ball) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                        ctx.lineWidth = 4;
-                        ctx.setLineDash([10, 10]);
-                        ctx.moveTo(shooter.x, shooter.y);
-                        ctx.lineTo(shooter.x + Math.cos(aimAngle)*canvas.height, shooter.y + Math.sin(aimAngle)*canvas.height);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
-                    }
-
-                    // Текущий блин
-                    if (!shooter.ball) {
-                         drawPancake(shooter.x, shooter.y, shooter.curr);
-                    } else {
-                         drawPancake(shooter.ball.x, shooter.ball.y, shooter.ball.type);
-                    }
+                    if (b.x < RADIUS) { b.x = RADIUS; b.vx *= -1; }
+                    if (b.x > canvas.width - RADIUS) { b.x = canvas.width - RADIUS; b.vx *= -1; }
                     
-                    // Следующий блин (маленький сбоку)
-                    ctx.save();
-                    ctx.translate(shooter.x + RADIUS * 2.5, shooter.y + RADIUS);
-                    ctx.scale(0.6, 0.6);
-                    drawPancake(0, 0, shooter.next);
-                    ctx.restore();
+                    if (b.y < RADIUS) { b.y = RADIUS; snapBall(b); return; }
+                    if (checkCollision(b)) return;
+                }
+                if (b.y > canvas.height + RADIUS) resetShot();
+            }
+
+            // Эффекты
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= 0.03; p.vy += 0.5;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+            for (let i = falling.length - 1; i >= 0; i--) {
+                let f = falling[i];
+                f.x += f.vx; f.y += f.vy; f.vy += 0.8; f.rot += f.rotSpd;
+                if (f.y > canvas.height + DIAMETER) falling.splice(i, 1);
+            }
+        }
+
+        function checkCollision(b) {
+            let startR = Math.floor((b.y - RADIUS) / DIAMETER) - 1;
+            let endR = startR + 3;
+            for (let r = Math.max(0, startR); r < Math.min(rows, endR); r++) {
+                for (let c = 0; c < cols; c++) {
+                    let cell = grid[r]?.[c];
+                    if (cell) {
+                        let distSq = (b.x - cell.x)**2 + (b.y - cell.y)**2;
+                        if (distSq < (DIAMETER * 0.9)**2) { // 0.9 чувствительность
+                            snapBall(b);
+                            return true;
+                        }
+                    }
                 }
             }
+            return false;
+        }
 
-            function drawPancake(x, y, type) {
-                let r = RADIUS - 1; // Чуть меньше для зазора
-                
-                if (type === BOMB_TYPE) {
-                    // Бомба
-                    ctx.beginPath();
-                    ctx.arc(x, y, r, 0, Math.PI*2);
-                    ctx.fillStyle = '#333';
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = '#fff';
-                    ctx.stroke();
-                    // Фитиль
-                    ctx.fillStyle = 'red';
-                    ctx.font = `${r}px Arial`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('💣', x, y+2);
-                    return;
-                }
+        function snapBall(b) {
+            let c = Math.round((b.x - offsetX - RADIUS) / DIAMETER);
+            let r = Math.round((b.y - RADIUS) / DIAMETER);
+            c = Math.max(0, Math.min(c, cols - 1));
+            r = Math.max(0, Math.min(r, rows - 1));
 
-                let img = pancakeImgs[type];
-                if (img && img.complete && img.naturalWidth > 0) {
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(x, y, r, 0, Math.PI*2);
-                    ctx.clip();
-                    // Рисуем фон
-                    ctx.fillStyle = PANCAKE_TYPES[type].color;
-                    ctx.fill();
-                    // Рисуем картинку
-                    ctx.drawImage(img, x-r, y-r, r*2, r*2);
-                    // Обводка
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = PANCAKE_TYPES[type].border;
-                    ctx.stroke();
-                    ctx.restore();
-                } else {
-                    // Фолбэк (просто круги)
-                    ctx.beginPath();
-                    ctx.arc(x, y, r, 0, Math.PI*2);
-                    ctx.fillStyle = PANCAKE_TYPES[type].color;
-                    ctx.fill();
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = PANCAKE_TYPES[type].border;
-                    ctx.stroke();
-                }
-                
-                // Блик
-                ctx.beginPath();
-                ctx.arc(x - r*0.3, y - r*0.3, r*0.2, 0, Math.PI*2);
-                ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                ctx.fill();
-            }
+            if (grid[r] && grid[r][c]) r++; 
+            if (r >= rows) return endGame();
 
-            function loop() {
-                update();
-                draw();
-                requestAnimationFrame(loop);
-            }
-
-            // === ВВОД (TOUCH + MOUSE) ===
-            function handleStart(x, y) {
-                if (state !== 'PLAYING' || shooter.ball) return;
-                isAiming = true;
-                handleMove(x, y);
-            }
+            if (!grid[r]) grid[r] = new Array(cols).fill(null);
+            addBall(r, c, b.type);
             
-            function handleMove(x, y) {
-                if (!isAiming) return;
-                let dx = x - shooter.x;
-                let dy = y - shooter.y;
-                if (dy > -20) dy = -20; // Не стрелять вниз
-                aimAngle = Math.atan2(dy, dx);
-            }
-            
-            function handleEnd() {
-                if (isAiming) {
-                    isAiming = false;
-                    fire();
-                }
-            }
-            
-            function fire() {
-                sounds.shoot();
-                shooter.ball = {
-                    x: shooter.x, y: shooter.y, type: shooter.curr,
-                    vx: Math.cos(aimAngle) * SPEED,
-                    vy: Math.sin(aimAngle) * SPEED
-                };
-            }
-            
-            function getPos(e) {
-                let rect = canvas.getBoundingClientRect();
-                let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
-            }
-
-            // Слушатели событий
-            // preventDefault обязателен для отключения скролла на мобильных
-            canvas.addEventListener('mousedown', e => handleStart(getPos(e).x, getPos(e).y));
-            canvas.addEventListener('mousemove', e => handleMove(getPos(e).x, getPos(e).y));
-            window.addEventListener('mouseup', handleEnd);
-
-            canvas.addEventListener('touchstart', e => {
-                e.preventDefault();
-                let pos = getPos(e);
-                handleStart(pos.x, pos.y);
-            }, {passive: false});
-            
-            canvas.addEventListener('touchmove', e => {
-                e.preventDefault();
-                let pos = getPos(e);
-                handleMove(pos.x, pos.y);
-            }, {passive: false});
-            
-            window.addEventListener('touchend', handleEnd);
-
-            // UI логика
-            document.getElementById('action-btn').onclick = initGame;
-            document.getElementById('pauseBtn').onclick = () => {
-                if (state === 'PLAYING') {
-                    state = 'PAUSED';
-                    document.getElementById('pauseScore').innerText = score;
-                    document.getElementById('pauseLives').innerText = lives;
-                    toggleModal('pauseModal', true);
-                }
-            };
-            document.getElementById('resumeBtn').onclick = () => {
-                state = 'PLAYING';
-                toggleModal('pauseModal', false);
-            };
-            document.getElementById('soundToggle').onclick = function() {
-                soundEnabled = !soundEnabled;
-                this.classList.toggle('muted');
-                if(soundEnabled) audioCtx.resume();
-            };
-
-            function toggleModal(id, show) {
-                const el = document.getElementById(id);
-                if (show) el.classList.remove('hidden'); else el.classList.add('hidden');
-            }
-
-            function updateUI() {
-                document.getElementById('score').innerText = score;
-                document.getElementById('high-score').innerText = highScore;
-                const lc = document.getElementById('lives-container');
-                lc.innerHTML = '';
-                for(let i=0; i<MAX_LIVES; i++) {
-                    let d = document.createElement('div');
-                    d.className = 'life-dot' + (i >= lives ? ' lost' : '');
-                    lc.appendChild(d);
-                }
-            }
-            
-            window.addEventListener('resize', () => {
-                if(state !== 'MENU') resize();
+            let hitBomb = false;
+            getNeighbors(r, c).forEach(n => {
+                if (grid[n.r][n.c].type === BOMB_TYPE) { explode(n.r, n.c); hitBomb = true; }
             });
 
-            // Старт
-            resize();
-            loop();
+            if (!hitBomb) {
+                if (b.type === BOMB_TYPE) explode(r, c);
+                else {
+                    let matches = findMatches(r, c, b.type, []);
+                    if (matches.length >= 3) {
+                        sounds.pop(); removeBalls(matches); score += matches.length * 10; checkFloating();
+                    } else {
+                        sounds.miss(); lives--;
+                        if (lives <= 0) { addRow(); lives = MAX_LIVES; }
+                    }
+                }
+            }
+            resetShot(); updateUI(); checkLose();
+        }
 
-        })();
-    </script>
+        function findMatches(r, c, type, visited) {
+            let key = r + ',' + c;
+            if (visited.includes(key)) return [];
+            visited.push(key);
+            let matches = [{r,c}];
+            getNeighbors(r, c).forEach(n => {
+                if (grid[n.r][n.c].type === type) matches = matches.concat(findMatches(n.r, n.c, type, visited));
+            });
+            return matches;
+        }
+
+        function getNeighbors(r, c) {
+            return [[0,1], [0,-1], [1,0], [-1,0]]
+                .map(d => ({r: r + d[0], c: c + d[1]}))
+                .filter(n => n.r >= 0 && n.r < rows && n.c >= 0 && n.c < cols && grid[n.r] && grid[n.r][n.c]);
+        }
+
+        function removeBalls(list) {
+            list.forEach(p => {
+                if (grid[p.r][p.c]) {
+                    createParticles(grid[p.r][p.c].x, grid[p.r][p.c].y, grid[p.r][p.c].type);
+                    grid[p.r][p.c] = null;
+                }
+            });
+        }
+
+        function explode(r, c) {
+            sounds.bomb();
+            let range = 2;
+            for (let i = r - range; i <= r + range; i++) {
+                for (let j = c - range; j <= c + range; j++) {
+                    if (i >= 0 && i < rows && j >= 0 && j < cols && grid[i] && grid[i][j]) {
+                            createParticles(grid[i][j].x, grid[i][j].y, BOMB_TYPE);
+                            grid[i][j] = null;
+                            score += 5;
+                    }
+                }
+            }
+            checkFloating();
+        }
+
+        function checkFloating() {
+            let connected = new Set();
+            let queue = [];
+            if (grid[0]) {
+                for (let c = 0; c < cols; c++) if (grid[0][c]) { connected.add('0,' + c); queue.push({r:0, c:c}); }
+            }
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                getNeighbors(curr.r, curr.c).forEach(n => {
+                    let key = n.r + ',' + n.c;
+                    if (!connected.has(key)) { connected.add(key); queue.push(n); }
+                });
+            }
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (grid[r][c] && !connected.has(r + ',' + c)) {
+                        let cell = grid[r][c];
+                        falling.push({ x: cell.x, y: cell.y, type: cell.type, vx: (Math.random()-0.5)*10, vy: -5, rot: 0, rotSpd: (Math.random()-0.5)*0.2 });
+                        grid[r][c] = null; score += 20;
+                    }
+                }
+            }
+        }
+
+        function addRow() {
+            for (let r = rows - 2; r >= 0; r--) {
+                grid[r+1] = grid[r];
+                if (grid[r+1]) for(let c=0; c<cols; c++) if(grid[r+1][c]) grid[r+1][c].y += DIAMETER;
+            }
+            grid[0] = new Array(cols).fill(null);
+            for (let c = 0; c < cols; c++) if(Math.random() > 0.2) addBall(0, c, Math.random()<0.05?BOMB_TYPE:randType());
+        }
+
+        function createParticles(x, y, type) {
+            let color = type === BOMB_TYPE ? '#333' : PANCAKE_TYPES[type].color;
+            for(let i=0; i<8; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: color });
+        }
+
+        function resetShot() {
+            shooter.ball = null; shooter.curr = shooter.next; shooter.next = randType();
+        }
+
+        function checkLose() {
+            for(let c=0; c<cols; c++) {
+                let dangerRow = Math.floor((shooter.y - RADIUS * 2) / DIAMETER);
+                if (grid[dangerRow] && grid[dangerRow][c]) { endGame(); return; }
+            }
+        }
+
+        function endGame() {
+            state = 'END';
+            if (score > highScore) { highScore = score; localStorage.setItem('blini_hs', highScore); }
+            document.getElementById('modal-title').innerText = "ИГРА ОКОНЧЕНА";
+            document.getElementById('modal-desc').innerHTML = `Счет: ${score}<br>Рекорд: ${highScore}`;
+            document.getElementById('flavors-section').style.display = 'none';
+            document.getElementById('action-btn').innerText = "ПОПРОБОВАТЬ СНОВА";
+            toggleModal('modal', true);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (grid[r]?.[c]) drawPancake(grid[r][c].x, grid[r][c].y, grid[r][c].type);
+            falling.forEach(f => { ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); drawPancake(0, 0, f.type); ctx.restore(); });
+            particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, RADIUS/3, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
+
+            if (state !== 'MENU') {
+                if (isAiming && !shooter.ball) {
+                    ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 4; ctx.setLineDash([10, 10]);
+                    ctx.moveTo(shooter.x, shooter.y);
+                    ctx.lineTo(shooter.x + Math.cos(aimAngle)*canvas.height, shooter.y + Math.sin(aimAngle)*canvas.height);
+                    ctx.stroke(); ctx.setLineDash([]);
+                }
+                if (!shooter.ball) drawPancake(shooter.x, shooter.y, shooter.curr);
+                else drawPancake(shooter.ball.x, shooter.ball.y, shooter.ball.type);
+                
+                ctx.save(); ctx.translate(shooter.x + RADIUS * 2.5, shooter.y + RADIUS); ctx.scale(0.6, 0.6);
+                drawPancake(0, 0, shooter.next); ctx.restore();
+            }
+        }
+
+        function drawPancake(x, y, type) {
+            let r = RADIUS - 1;
+            if (type === BOMB_TYPE) {
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = '#333'; ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+                ctx.fillStyle = 'red'; ctx.font = `${r}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('💣', x, y+2); return;
+            }
+            let img = pancakeImgs[type];
+            if (img && img.complete && img.naturalWidth > 0) {
+                ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.clip();
+                ctx.fillStyle = PANCAKE_TYPES[type].color; ctx.fill();
+                ctx.drawImage(img, x-r, y-r, r*2, r*2);
+                ctx.lineWidth = 3; ctx.strokeStyle = PANCAKE_TYPES[type].border; ctx.stroke(); ctx.restore();
+            } else {
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle = PANCAKE_TYPES[type].color; ctx.fill();
+                ctx.lineWidth = 3; ctx.strokeStyle = PANCAKE_TYPES[type].border; ctx.stroke();
+            }
+            ctx.beginPath(); ctx.arc(x - r*0.3, y - r*0.3, r*0.2, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill();
+        }
+
+        function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+        // === ГЛАВНОЕ ИСПРАВЛЕНИЕ: ОТДЕЛЬНОЕ УПРАВЛЕНИЕ ДЛЯ TOUCH И MOUSE ===
+        
+        // Универсальная функция получения координат
+        function getTouchPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            // Если это Touch событие
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+            }
+            // Если это Mouse событие
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        // Общая логика старта
+        function inputStart(pos) {
+            tryResumeAudio();
+            if (state !== 'PLAYING' || shooter.ball) return;
+            isAiming = true;
+            inputMove(pos);
+        }
+
+        // Общая логика движения
+        function inputMove(pos) {
+            if (!isAiming) return;
+            let dx = pos.x - shooter.x;
+            let dy = pos.y - shooter.y;
+            if (dy > -20) dy = -20;
+            aimAngle = Math.atan2(dy, dx);
+        }
+
+        // Общая логика выстрела
+        function inputEnd() {
+            if (isAiming) {
+                isAiming = false;
+                fire();
+            }
+        }
+
+        function fire() {
+            sounds.shoot();
+            shooter.ball = { x: shooter.x, y: shooter.y, type: shooter.curr, vx: Math.cos(aimAngle) * SPEED, vy: Math.sin(aimAngle) * SPEED };
+        }
+
+        // --- ОБРАБОТЧИКИ TOUCH (ТЕЛЕФОН) ---
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault(); // Блокирует зум и скролл
+            inputStart(getTouchPos(e));
+        }, {passive: false});
+
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            inputMove(getTouchPos(e));
+        }, {passive: false});
+
+        // touchend на канвасе
+        canvas.addEventListener('touchend', e => {
+            e.preventDefault();
+            inputEnd();
+        });
+
+        // --- ОБРАБОТЧИКИ MOUSE (КОМПЬЮТЕР) ---
+        canvas.addEventListener('mousedown', e => {
+            inputStart(getTouchPos(e));
+        });
+
+        window.addEventListener('mousemove', e => {
+            inputMove(getTouchPos(e));
+        });
+
+        window.addEventListener('mouseup', inputEnd);
+
+        // --- UI ---
+        document.getElementById('action-btn').onclick = initGame;
+        document.getElementById('pauseBtn').onclick = (e) => {
+            e.stopPropagation();
+            if (state === 'PLAYING') { state = 'PAUSED'; document.getElementById('pauseScore').innerText = score; document.getElementById('pauseLives').innerText = lives; toggleModal('pauseModal', true); }
+        };
+        document.getElementById('resumeBtn').onclick = () => { state = 'PLAYING'; toggleModal('pauseModal', false); };
+        document.getElementById('soundToggle').onclick = function(e) {
+            e.stopPropagation(); soundEnabled = !soundEnabled; this.classList.toggle('muted'); tryResumeAudio();
+        };
+
+        function toggleModal(id, show) {
+            const el = document.getElementById(id);
+            if (show) el.classList.remove('hidden'); else el.classList.add('hidden');
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = score; document.getElementById('high-score').innerText = highScore;
+            const lc = document.getElementById('lives-container'); lc.innerHTML = '';
+            for(let i=0; i<MAX_LIVES; i++) { let d = document.createElement('div'); d.className = 'life-dot' + (i >= lives ? ' lost' : ''); lc.appendChild(d); }
+        }
+        
+        window.addEventListener('resize', () => { if(state !== 'MENU') resize(); });
+
+        resize();
+        loop();
+    })();
+</script>
 </body>
 </html>
+
