@@ -2,41 +2,63 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Башня из блинов</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; color: #333;
+            overflow: hidden; height: 100vh; width: 100vw;
+            display: flex; flex-direction: column; align-items: center; color: #333;
+        }
+        h1 {
+            position: absolute; top: 15px; width: 100%; text-align: center;
+            color: #ff6b6b; z-index: 5; font-size: 24px; pointer-events: none;
+            text-shadow: 2px 2px 0px #fff;
         }
         #game-container {
-            width: 100%; max-width: 450px; height: 90vh; position: relative; overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); border-radius: 10px; background-color: #fff; margin-top: 10px;
+            width: 100%; height: 100%; position: relative; overflow: hidden;
+            background-color: transparent;
         }
         canvas { display: block; width: 100%; height: 100%; }
+        
         #score-container {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9); padding: 8px 25px; border-radius: 50px;
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9); padding: 5px 25px; border-radius: 50px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; display: none;
+            pointer-events: none;
         }
         #score { font-size: 32px; font-weight: bold; color: #ff6b6b; }
+        
         .modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 100;
+            backdrop-filter: blur(5px);
         }
         .modal-content {
-            background: white; padding: 30px; border-radius: 20px; text-align: center; max-width: 80%;
+            background: white; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 400px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        h2 { margin-bottom: 15px; color: #333; }
+        p { margin-bottom: 25px; color: #666; line-height: 1.5; }
+        
         button {
-            background: #ff9e6d; color: white; border: none; padding: 15px 40px;
-            font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer; margin-top: 20px;
+            background: linear-gradient(to right, #ff9e6d, #ff6b6b);
+            color: white; border: none; padding: 15px 40px; width: 100%;
+            font-size: 18px; font-weight: bold; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+            transition: transform 0.1s;
         }
+        button:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
-    <h1 style="margin-top:10px; color:#ff6b6b;">🍽️ Блинный Шеф 🥞</h1>
+    <h1>🍽️ Блинный Шеф 🥞</h1>
+    
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         <div id="score-container"><div id="score">0</div></div>
@@ -44,17 +66,19 @@
         <div id="start-modal" class="modal">
             <div class="modal-content">
                 <h2>Шеф, пора готовить!</h2>
-                <p>Строй башню под музыку. Жми на экран, чтобы бросить блин! 🎵</p>
-                <button onclick="startGame()">Включить музыку и начать</button>
+                <p>Нажми в любой момент, чтобы бросить блин. Построй самую высокую башню! 🎵</p>
+                <button id="start-btn">Играть</button>
             </div>
         </div>
 
         <div id="game-over" class="modal" style="display:none;">
             <div class="modal-content">
-                <h2>Упало!</h2>
-                <p>Ваш счёт:</p>
-                <h1 id="final-score" style="color:#ff6b6b; font-size:48px;">0</h1>
-                <button onclick="startGame()">Попробовать снова</button>
+                <h2>Ой, упало! 😱</h2>
+                <p>Твоя башня высотой:</p>
+                <h1 style="position:relative; top:0; color:#ff6b6b; font-size:64px; margin-bottom: 20px;">
+                    <span id="final-score">0</span>
+                </h1>
+                <button id="restart-btn">Попробовать снова</button>
             </div>
         </div>
     </div>
@@ -62,225 +86,355 @@
 <script>
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
-    const scoreElement = document.getElementById('score');
-    const scoreContainer = document.getElementById('score-container');
+    const scoreEl = document.getElementById('score');
     
-    const PANCAKE_H = 25;
-    const SPACING = 120;
-    const TYPES = [
-        { c: "#ff6b6b", p: "#ff4757" }, { c: "#ffd166", p: "#eccc68" },
-        { c: "#f7fff7", p: "#ced6e0" }, { c: "#8d5524", p: "#5d3e21" }
+    // Настройки
+    const CONFIG = {
+        pancakeHeight: 30,
+        startWidth: 200,
+        startSpeed: 3,
+        cameraScrollSpeed: 0.1
+    };
+
+    const COLORS = [
+        { c: "#FFB7B2", p: "#FF9E99" }, // Розоватый
+        { c: "#FFDAC1", p: "#FFC8A2" }, // Персиковый
+        { c: "#E2F0CB", p: "#C4E09E" }, // Салатовый
+        { c: "#B5EAD7", p: "#95DBC0" }, // Мятный
+        { c: "#C7CEEA", p: "#A8B3DF" }, // Лавандовый
+        { c: "#FDCB6E", p: "#E1B12C" }  // Золотистый (классический)
     ];
 
     let state = {
-        running: false, score: 0, speed: 2.5, stack: [],
-        debris: [], particles: [], current: null, dir: 1,
-        pendingScroll: 0, tableY: 0
+        running: false,
+        score: 0,
+        stack: [],
+        current: null, // { x, y, w, colorIdx, dir, speed }
+        debris: [],
+        particles: [],
+        cameraY: 0,
+        targetCameraY: 0
     };
 
-    // --- ЗВУКОВОЙ МОДУЛЬ ---
+    // --- АУДИО СИСТЕМА (FIXED) ---
     let audioCtx = null;
-    let musicStarted = false;
-
+    
     function initAudio() {
         if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
         }
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
-        if (!musicStarted) {
-            startMusicLoop();
-            musicStarted = true;
-        }
     }
 
-    function playSplat() {
+    function playTone(freq, type = 'sine', duration = 0.1) {
         if (!audioCtx) return;
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.frequency.setValueAtTime(120, audioCtx.currentTime);
-        o.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15);
-        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-        o.connect(g); g.connect(audioCtx.destination);
-        o.start(); o.stop(audioCtx.currentTime + 0.15);
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
     }
 
-    function startMusicLoop() {
-        const tempo = 120;
-        const secondsPerBeat = 60 / tempo;
-        let nextNoteTime = audioCtx.currentTime;
-
-        function scheduleNote() {
-            while (nextNoteTime < audioCtx.currentTime + 0.1) {
-                // Басовая линия (Lo-Fi Bass)
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                const freq = [55, 65, 49, 43][Math.floor(nextNoteTime / secondsPerBeat / 4) % 4];
-                
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(freq, nextNoteTime);
-                gain.gain.setValueAtTime(0.04, nextNoteTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + secondsPerBeat * 0.8);
-                
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(nextNoteTime);
-                osc.stop(nextNoteTime + secondsPerBeat * 0.8);
-
-                // Легкий перкуссионный щелчок (Hi-hat)
-                const noise = audioCtx.createOscillator();
-                const noiseGain = audioCtx.createGain();
-                noise.type = 'square';
-                noise.frequency.setValueAtTime(1000, nextNoteTime);
-                noiseGain.gain.setValueAtTime(0.01, nextNoteTime);
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + 0.05);
-                noise.connect(noiseGain);
-                noiseGain.connect(audioCtx.destination);
-                noise.start(nextNoteTime);
-                noise.stop(nextNoteTime + 0.05);
-
-                nextNoteTime += secondsPerBeat;
-            }
-            setTimeout(scheduleNote, 25);
-        }
-        scheduleNote();
+    function playNote(index) {
+        // Простая пентатоника
+        const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; 
+        playTone(scale[index % scale.length], 'triangle', 0.3);
     }
 
-    // --- КЛАССЫ ЭФФЕКТОВ ---
-    class Particle {
-        constructor(x, y, color) {
-            this.x = x; this.y = y;
-            this.size = Math.random() * 5 + 2;
-            this.vx = (Math.random() - 0.5) * 8;
-            this.vy = -Math.random() * 5 - 2;
-            this.color = color; this.life = 1;
-        }
-        update() { this.x += this.vx; this.y += this.vy; this.vy += 0.3; this.life -= 0.02; }
+    function playFail() {
+        playTone(150, 'sawtooth', 0.5);
+        playTone(100, 'sawtooth', 0.5);
     }
 
-    class Debris {
-        constructor(x, y, w, color) {
-            this.x = x; this.y = y; this.w = w; this.color = color;
-            this.vy = 0; this.rot = 0; this.rs = (Math.random()-0.5)*0.2;
-        }
-        update() { this.vy += 0.8; this.y += this.vy; this.rot += this.rs; }
+    // --- ГРАФИКА И РЕСАЙЗ ---
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        // Если игра не идет, перерисовываем один кадр, чтобы не было пустого экрана
+        if (!state.running && state.stack.length > 0) drawFrame();
     }
+    window.addEventListener('resize', resize);
 
-    // --- ЛОГИКА ИГРЫ ---
-    function startGame() {
-        initAudio(); // Важно: запуск звука по клику
+    // --- ИГРОВАЯ ЛОГИКА ---
+    function resetGame() {
+        state.score = 0;
+        state.stack = [];
+        state.debris = [];
+        state.particles = [];
+        state.cameraY = 0;
+        state.targetCameraY = 0;
+        
+        // Базовый блин (основание)
+        const baseWidth = CONFIG.startWidth;
+        const startX = (canvas.width / (window.devicePixelRatio || 1)) / 2;
+        const startY = (canvas.height / (window.devicePixelRatio || 1)) - 100;
+
+        state.stack.push({
+            x: startX,
+            y: startY,
+            w: baseWidth,
+            cIdx: 5 // Золотистый
+        });
+
+        spawnNext();
+        state.running = true;
+        
+        document.getElementById('score-container').style.display = 'block';
         document.getElementById('start-modal').style.display = 'none';
         document.getElementById('game-over').style.display = 'none';
-        scoreContainer.style.display = 'block';
+        scoreEl.innerText = "0";
         
-        state = {
-            running: true, score: 0, speed: 2.5, dir: 1,
-            stack: [{ x: canvas.width/2, y: canvas.height - 100, w: 180, type: 0 }],
-            debris: [], particles: [], pendingScroll: 0, tableY: canvas.height - 100,
-            current: null
-        };
-        scoreElement.textContent = "0";
-        spawnNext();
+        loop();
     }
 
     function spawnNext() {
-        const last = state.stack[state.stack.length-1];
+        const top = state.stack[state.stack.length - 1];
+        const nextY = top.y - CONFIG.pancakeHeight;
+        
         state.current = {
-            x: canvas.width/2, y: last.y - SPACING, w: last.w,
-            type: Math.floor(Math.random() * TYPES.length), falling: false
+            x: 0, // Стартует слева
+            y: nextY,
+            w: top.w,
+            cIdx: Math.floor(Math.random() * COLORS.length),
+            dir: 1,
+            speed: CONFIG.startSpeed + (state.score * 0.15),
+            falling: false
         };
+        
+        // Камера сдвигается вверх каждые несколько блинов
+        state.targetCameraY = (state.score * CONFIG.pancakeHeight);
     }
 
-    function handleInput() {
-        if (!state.running || state.current.falling) return;
-        state.current.falling = true;
+    function placePancake() {
+        if (!state.current || state.current.falling) return;
+        
+        const curr = state.current;
+        const prev = state.stack[state.stack.length - 1];
+        
+        // Разница позиций
+        const delta = curr.x - prev.x;
+        const overhang = Math.abs(delta);
+        const overlap = prev.w - overhang;
+
+        if (overlap > 0) {
+            // Успех (отрезаем лишнее)
+            playNote(state.score);
+            state.score++;
+            scoreEl.innerText = state.score;
+            
+            // Новые координаты и ширина обрезанного блина
+            let newW = overlap;
+            let newX = prev.x + delta / 2;
+
+            // Добавляем в стек
+            state.stack.push({
+                x: newX,
+                y: curr.y,
+                w: newW,
+                cIdx: curr.cIdx
+            });
+
+            // Эффект обрезка (падающий кусок)
+            const debrisW = overhang;
+            let debrisX;
+            if (delta > 0) { // Свес справа
+                debrisX = newX + newW/2 + debrisW/2;
+            } else { // Свес слева
+                debrisX = newX - newW/2 - debrisW/2;
+            }
+            createDebris(debrisX, curr.y, debrisW, curr.cIdx);
+            createParticles(newX, curr.y, COLORS[curr.cIdx].c);
+
+            spawnNext();
+        } else {
+            // Промах
+            gameOver();
+        }
     }
 
+    function createDebris(x, y, w, cIdx) {
+        state.debris.push({
+            x: x, y: y, w: w, h: CONFIG.pancakeHeight,
+            cIdx: cIdx, vy: 0, rot: 0, vr: (Math.random() - 0.5) * 0.2
+        });
+    }
+
+    function createParticles(x, y, color) {
+        for(let i=0; i<10; i++) {
+            state.particles.push({
+                x: x + (Math.random()-0.5)*40,
+                y: y,
+                vx: (Math.random()-0.5)*10,
+                vy: (Math.random()-0.5)*10,
+                life: 1.0,
+                color: color
+            });
+        }
+    }
+
+    function gameOver() {
+        state.running = false;
+        playFail();
+        
+        // Эффект падения текущего блина
+        const curr = state.current;
+        createDebris(curr.x, curr.y, curr.w, curr.cIdx);
+        state.current = null;
+
+        setTimeout(() => {
+            document.getElementById('final-score').innerText = state.score;
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('score-container').style.display = 'none';
+        }, 500);
+    }
+
+    // --- ГЛАВНЫЙ ЦИКЛ ---
     function update() {
         if (!state.running) return;
-
-        if (state.pendingScroll > 0) {
-            let s = Math.min(state.pendingScroll, 5);
-            state.tableY += s;
-            state.stack.forEach(p => p.y += s);
-            state.debris.forEach(d => d.y += s);
-            state.current.y += s;
-            state.pendingScroll -= s;
+        
+        // Движение текущего блина
+        if (state.current) {
+            const limitX = (canvas.width / (window.devicePixelRatio || 1));
+            state.current.x += state.current.speed * state.current.dir;
+            
+            // Отскок от краев (с запасом, чтобы не улетал далеко)
+            if (state.current.x > limitX - 50 && state.current.dir > 0) state.current.dir = -1;
+            if (state.current.x < 50 && state.current.dir < 0) state.current.dir = 1;
         }
 
-        if (!state.current.falling) {
-            state.current.x += state.speed * state.dir;
-            if (state.current.x > canvas.width - state.current.w/2 || state.current.x < state.current.w/2) state.dir *= -1;
-        } else {
-            state.current.y += 10;
-            const last = state.stack[state.stack.length-1];
-            if (state.current.y + PANCAKE_H/2 >= last.y - PANCAKE_H/2) {
-                const diff = state.current.x - last.x;
-                if (Math.abs(diff) >= last.w) {
-                    state.running = false;
-                    document.getElementById('game-over').style.display = 'flex';
-                    document.getElementById('final-score').textContent = state.score;
-                } else {
-                    const newW = last.w - Math.abs(diff);
-                    const newX = last.x + diff/2;
-                    
-                    if (diff > 0) state.debris.push(new Debris(newX + newW/2 + (diff/2), last.y - PANCAKE_H, diff, TYPES[state.current.type].c));
-                    else if (diff < 0) state.debris.push(new Debris(newX - newW/2 + (diff/2), last.y - PANCAKE_H, Math.abs(diff), TYPES[state.current.type].c));
-
-                    state.stack.push({ x: newX, y: last.y - PANCAKE_H, w: newW, type: state.current.type });
-                    state.score++;
-                    scoreElement.textContent = state.score;
-                    state.speed += 0.1;
-                    
-                    playSplat();
-                    for(let i=0; i<12; i++) state.particles.push(new Particle(newX, last.y - PANCAKE_H, TYPES[state.current.type].p));
-                    
-                    if (state.stack[state.stack.length-1].y < 400) state.pendingScroll += SPACING;
-                    spawnNext();
-                }
-            }
-        }
-        state.debris.forEach((d, i) => { d.update(); if (d.y > canvas.height + 100) state.debris.splice(i, 1); });
-        state.particles.forEach((p, i) => { p.update(); if (p.life <= 0) state.particles.splice(i, 1); });
+        // Плавная камера
+        state.cameraY += (state.targetCameraY - state.cameraY) * 0.1;
     }
 
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#8B4513";
-        ctx.fillRect(0, state.tableY + PANCAKE_H/2, canvas.width, 500);
+    function drawFrame() {
+        const width = canvas.width / (window.devicePixelRatio || 1);
+        const height = canvas.height / (window.devicePixelRatio || 1);
+        
+        ctx.clearRect(0, 0, width, height);
 
+        ctx.save();
+        // Смещаем мир вниз по мере роста башни
+        ctx.translate(0, state.cameraY);
+
+        // Рисуем стол (фон под башней)
+        const tableY = state.stack[0] ? state.stack[0].y + CONFIG.pancakeHeight/2 : height;
+        ctx.fillStyle = "#8d5524";
+        ctx.fillRect(0, tableY, width, height);
+
+        // Рисуем стек
         state.stack.forEach(p => {
-            ctx.fillStyle = TYPES[p.type].c;
-            ctx.strokeStyle = "#5d3e21"; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.roundRect(p.x - p.w/2, p.y - PANCAKE_H/2, p.w, PANCAKE_H, 8); ctx.fill(); ctx.stroke();
+            drawPancake(p.x, p.y, p.w, p.cIdx);
         });
 
-        state.debris.forEach(d => {
-            ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.rot);
-            ctx.fillStyle = d.color; ctx.beginPath(); ctx.roundRect(-d.w/2, -PANCAKE_H/2, d.w, PANCAKE_H, 5); ctx.fill(); ctx.restore();
-        });
+        // Рисуем обломки
+        for (let i = state.debris.length - 1; i >= 0; i--) {
+            let d = state.debris[i];
+            d.vy += 0.8; // Гравитация
+            d.y += d.vy;
+            d.rot += d.vr;
+            
+            ctx.save();
+            ctx.translate(d.x, d.y);
+            ctx.rotate(d.rot);
+            drawPancake(0, 0, d.w, d.cIdx);
+            ctx.restore();
 
-        if (state.current) {
-            ctx.fillStyle = TYPES[state.current.type].c;
-            ctx.beginPath(); ctx.roundRect(state.current.x - state.current.w/2, state.current.y - PANCAKE_H/2, state.current.w, PANCAKE_H, 8); ctx.fill(); ctx.stroke();
+            if (d.y > height + state.cameraY + 100) state.debris.splice(i, 1);
         }
 
-        state.particles.forEach(p => {
-            ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-        });
+        // Рисуем текущий
+        if (state.current) {
+            drawPancake(state.current.x, state.current.y, state.current.w, state.current.cIdx);
+        }
+
+        // Частицы
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+            let p = state.particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.05;
+            
+            ctx.globalAlpha = Math.max(0, p.life);
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+            ctx.fill();
+            
+            if (p.life <= 0) state.particles.splice(i, 1);
+        }
         ctx.globalAlpha = 1;
 
-        update();
-        requestAnimationFrame(draw);
+        ctx.restore();
     }
 
-    canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
-    window.addEventListener('mousedown', handleInput);
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); }, {passive: false});
-    draw();
+    function drawPancake(x, y, w, cIdx) {
+        const color = COLORS[cIdx % COLORS.length];
+        const h = CONFIG.pancakeHeight;
+        
+        // Тень/Боковина
+        ctx.fillStyle = color.p;
+        ctx.beginPath();
+        ctx.roundRect(x - w/2, y - h/2 + 5, w, h, 10);
+        ctx.fill();
+
+        // Верхняя часть
+        ctx.fillStyle = color.c;
+        ctx.beginPath();
+        ctx.roundRect(x - w/2, y - h/2, w, h-5, 10);
+        ctx.fill();
+        
+        // Блик
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.beginPath();
+        ctx.ellipse(x - w/4, y - h/2 + 5, w/4, 3, 0, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    function loop() {
+        if (!state.running && state.debris.length === 0) return;
+        update();
+        drawFrame();
+        if (state.running || state.debris.length > 0) requestAnimationFrame(loop);
+    }
+
+    // --- ВВОД ПОЛЬЗОВАТЕЛЯ ---
+    function handleInput(e) {
+        if (e.type !== 'click' && e.cancelable) e.preventDefault(); // Блокируем зум
+        if (state.running) {
+            placePancake();
+        }
+    }
+
+    // Обработчики кнопок
+    document.getElementById('start-btn').addEventListener('click', () => {
+        initAudio(); // Важно: звук активируется здесь
+        resize(); // Обновляем размер перед стартом
+        resetGame();
+    });
+
+    document.getElementById('restart-btn').addEventListener('click', () => {
+        resetGame();
+    });
+
+    // Обработчики игры (экран)
+    const gameArea = document.getElementById('game-container');
+    gameArea.addEventListener('mousedown', handleInput);
+    gameArea.addEventListener('touchstart', handleInput, { passive: false });
+    
+    // Первый ресайз
+    resize();
+
 </script>
 </body>
 </html>
