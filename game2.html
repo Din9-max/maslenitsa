@@ -2,438 +2,343 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Башня из блинов</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Блинная Башня</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+        html, body {
+            width: 100%; height: 100%; margin: 0; padding: 0;
+            overflow: hidden; touch-action: none; /* Запрет зума и скролла */
+            font-family: 'Arial Rounded MT Bold', sans-serif;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            overflow: hidden; height: 100vh; width: 100vw;
-            display: flex; flex-direction: column; align-items: center; color: #333;
         }
-        h1 {
-            position: absolute; top: 15px; width: 100%; text-align: center;
-            color: #ff6b6b; z-index: 5; font-size: 24px; pointer-events: none;
-            text-shadow: 2px 2px 0px #fff;
-        }
-        #game-container {
-            width: 100%; height: 100%; position: relative; overflow: hidden;
-            background-color: transparent;
-        }
-        canvas { display: block; width: 100%; height: 100%; }
         
-        #score-container {
-            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9); padding: 5px 25px; border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; display: none;
-            pointer-events: none;
-        }
-        #score { font-size: 32px; font-weight: bold; color: #ff6b6b; }
-        
-        .modal {
+        /* Слой игры */
+        #game-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 100;
-            backdrop-filter: blur(5px);
+            z-index: 1;
         }
-        .modal-content {
-            background: white; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 400px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        
+        /* Слой интерфейса (поверх игры) */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none; /* Чтобы пропускать клики в игру, когда меню скрыто */
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
-        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        
-        h2 { margin-bottom: 15px; color: #333; }
-        p { margin-bottom: 25px; color: #666; line-height: 1.5; }
-        
-        button {
-            background: linear-gradient(to right, #ff9e6d, #ff6b6b);
-            color: white; border: none; padding: 15px 40px; width: 100%;
-            font-size: 18px; font-weight: bold; border-radius: 50px; cursor: pointer;
-            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+
+        /* Счет */
+        #score-board {
+            position: absolute; top: 10%; 
+            font-size: 4rem; color: rgba(255, 107, 107, 0.5); font-weight: bold;
+            pointer-events: none; user-select: none;
+            text-shadow: 2px 2px 0 #fff;
             transition: transform 0.1s;
         }
-        button:active { transform: scale(0.95); }
+
+        /* Меню (модальные окна) */
+        .screen {
+            pointer-events: auto; /* Включаем клики для меню */
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px; border-radius: 25px;
+            text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 80%; max-width: 350px;
+            display: flex; flex-direction: column; gap: 20px;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        h1 { margin: 0; color: #ff6b6b; font-size: 24px; }
+        p { margin: 0; color: #666; font-size: 16px; }
+        
+        .btn {
+            background: #ff6b6b; color: white; border: none; padding: 15px;
+            font-size: 20px; border-radius: 12px; font-weight: bold;
+            cursor: pointer; touch-action: manipulation;
+            box-shadow: 0 5px 0 #e05656;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .btn:active { transform: translateY(5px); box-shadow: none; }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <h1>🍽️ Блинный Шеф 🥞</h1>
-    
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-        <div id="score-container"><div id="score">0</div></div>
-        
-        <div id="start-modal" class="modal">
-            <div class="modal-content">
-                <h2>Шеф, пора готовить!</h2>
-                <p>Нажми в любой момент, чтобы бросить блин. Построй самую высокую башню! 🎵</p>
-                <button id="start-btn">Играть</button>
-            </div>
+
+    <canvas id="game-layer"></canvas>
+
+    <div id="ui-layer">
+        <div id="score-board" class="hidden">0</div>
+
+        <div id="start-screen" class="screen">
+            <h1>🥞 Блинная Башня</h1>
+            <p>Строй выше!<br>Коснись экрана, чтобы положить блин.</p>
+            <button class="btn" id="start-btn">ПОЕХАЛИ!</button>
         </div>
 
-        <div id="game-over" class="modal" style="display:none;">
-            <div class="modal-content">
-                <h2>Ой, упало! 😱</h2>
-                <p>Твоя башня высотой:</p>
-                <h1 style="position:relative; top:0; color:#ff6b6b; font-size:64px; margin-bottom: 20px;">
-                    <span id="final-score">0</span>
-                </h1>
-                <button id="restart-btn">Попробовать снова</button>
-            </div>
+        <div id="game-over-screen" class="screen hidden">
+            <h1>Упало! 😱</h1>
+            <p>Твой результат:</p>
+            <div style="font-size: 48px; color: #333;" id="final-score">0</div>
+            <button class="btn" id="restart-btn">ЕЩЁ РАЗ</button>
         </div>
     </div>
 
 <script>
-    const canvas = document.getElementById('game-canvas');
-    const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    
-    // Настройки
+    // --- НАСТРОЙКИ ---
     const CONFIG = {
-        pancakeHeight: 30,
-        startWidth: 200,
-        startSpeed: 3,
-        cameraScrollSpeed: 0.1
+        h: 35, // Высота блина
+        speed: 4, // Скорость
+        colors: ["#FFB7B2", "#FFDAC1", "#E2F0CB", "#B5EAD7", "#C7CEEA", "#ff9ff3"]
     };
 
-    const COLORS = [
-        { c: "#FFB7B2", p: "#FF9E99" }, // Розоватый
-        { c: "#FFDAC1", p: "#FFC8A2" }, // Персиковый
-        { c: "#E2F0CB", p: "#C4E09E" }, // Салатовый
-        { c: "#B5EAD7", p: "#95DBC0" }, // Мятный
-        { c: "#C7CEEA", p: "#A8B3DF" }, // Лавандовый
-        { c: "#FDCB6E", p: "#E1B12C" }  // Золотистый (классический)
-    ];
-
+    // --- СОСТОЯНИЕ ---
+    let canvas, ctx;
+    let w, h;
     let state = {
-        running: false,
+        phase: 'menu', // menu, playing, gameover
         score: 0,
-        stack: [],
-        current: null, // { x, y, w, colorIdx, dir, speed }
-        debris: [],
-        particles: [],
+        stack: [], // {x, y, w, color}
+        current: null, // {x, y, w, dir, pos}
         cameraY: 0,
-        targetCameraY: 0
+        debris: []
     };
 
-    // --- АУДИО СИСТЕМА (FIXED) ---
-    let audioCtx = null;
-    
-    function initAudio() {
-        if (!audioCtx) {
+    // --- АУДИО (Безопасное) ---
+    let audioCtx;
+    function tryInitAudio() {
+        try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-        }
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+            if (AudioContext) {
+                audioCtx = new AudioContext();
+                // Пустой звук для "прогрева" iOS
+                const osc = audioCtx.createOscillator();
+                osc.connect(audioCtx.destination);
+                osc.start(); osc.stop(0.01);
+            }
+        } catch (e) { console.warn("Audio disabled"); }
     }
 
-    function playTone(freq, type = 'sine', duration = 0.1) {
+    function beep(freq) {
         if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
+        try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        } catch(e) {}
     }
 
-    function playNote(index) {
-        // Простая пентатоника
-        const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; 
-        playTone(scale[index % scale.length], 'triangle', 0.3);
-    }
-
-    function playFail() {
-        playTone(150, 'sawtooth', 0.5);
-        playTone(100, 'sawtooth', 0.5);
-    }
-
-    // --- ГРАФИКА И РЕСАЙЗ ---
-    function resize() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        // Если игра не идет, перерисовываем один кадр, чтобы не было пустого экрана
-        if (!state.running && state.stack.length > 0) drawFrame();
-    }
-    window.addEventListener('resize', resize);
-
-    // --- ИГРОВАЯ ЛОГИКА ---
-    function resetGame() {
-        state.score = 0;
-        state.stack = [];
-        state.debris = [];
-        state.particles = [];
-        state.cameraY = 0;
-        state.targetCameraY = 0;
+    // --- ИНИЦИАЛИЗАЦИЯ ---
+    window.onload = () => {
+        canvas = document.getElementById('game-layer');
+        ctx = canvas.getContext('2d');
+        resize();
+        window.addEventListener('resize', resize);
         
-        // Базовый блин (основание)
-        const baseWidth = CONFIG.startWidth;
-        const startX = (canvas.width / (window.devicePixelRatio || 1)) / 2;
-        const startY = (canvas.height / (window.devicePixelRatio || 1)) - 100;
+        // Привязываем кнопки
+        document.getElementById('start-btn').addEventListener('pointerup', startGame);
+        document.getElementById('restart-btn').addEventListener('pointerup', startGame);
+        
+        // Привязываем клик по экрану (сама игра)
+        // Используем pointerdown для мгновенной реакции
+        document.addEventListener('pointerdown', handleGameInput);
 
+        loop(); // Запускаем цикл отрисовки сразу
+    };
+
+    function resize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+    }
+
+    // --- ЛОГИКА ИГРЫ ---
+    function startGame(e) {
+        // Важно: остановить всплытие события, чтобы оно не считалось кликом по игре
+        if(e) e.stopPropagation();
+        
+        tryInitAudio();
+
+        // Сброс состояния
+        state.score = 0;
+        state.debris = [];
+        state.stack = [];
+        state.cameraY = 0;
+        
+        // Базовый блин
         state.stack.push({
-            x: startX,
-            y: startY,
-            w: baseWidth,
-            cIdx: 5 // Золотистый
+            x: w/2, y: h - 100, w: 200, c: CONFIG.colors[0]
         });
 
-        spawnNext();
-        state.running = true;
+        spawnPancake();
         
-        document.getElementById('score-container').style.display = 'block';
-        document.getElementById('start-modal').style.display = 'none';
-        document.getElementById('game-over').style.display = 'none';
-        scoreEl.innerText = "0";
-        
-        loop();
+        // UI
+        state.phase = 'playing';
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('score-board').classList.remove('hidden');
+        updateScore(0);
     }
 
-    function spawnNext() {
+    function spawnPancake() {
         const top = state.stack[state.stack.length - 1];
-        const nextY = top.y - CONFIG.pancakeHeight;
-        
         state.current = {
-            x: 0, // Стартует слева
-            y: nextY,
+            y: top.y - CONFIG.h,
             w: top.w,
-            cIdx: Math.floor(Math.random() * COLORS.length),
-            dir: 1,
-            speed: CONFIG.startSpeed + (state.score * 0.15),
-            falling: false
+            x: 0, // Стартуем с края
+            dir: 1, // 1 вправо, -1 влево
+            pos: -200, // Фактическая позиция для анимации
+            c: CONFIG.colors[state.score % CONFIG.colors.length]
         };
+    }
+
+    function handleGameInput(e) {
+        // Если не играем, игнорируем нажатия
+        if (state.phase !== 'playing') return;
         
-        // Камера сдвигается вверх каждые несколько блинов
-        state.targetCameraY = (state.score * CONFIG.pancakeHeight);
+        // Блокируем множественные нажатия за кадр
+        if (!state.current) return;
+
+        placePancake();
     }
 
     function placePancake() {
-        if (!state.current || state.current.falling) return;
-        
         const curr = state.current;
         const prev = state.stack[state.stack.length - 1];
         
-        // Разница позиций
-        const delta = curr.x - prev.x;
-        const overhang = Math.abs(delta);
-        const overlap = prev.w - overhang;
-
-        if (overlap > 0) {
-            // Успех (отрезаем лишнее)
-            playNote(state.score);
-            state.score++;
-            scoreEl.innerText = state.score;
-            
-            // Новые координаты и ширина обрезанного блина
-            let newW = overlap;
-            let newX = prev.x + delta / 2;
-
-            // Добавляем в стек
-            state.stack.push({
-                x: newX,
-                y: curr.y,
-                w: newW,
-                cIdx: curr.cIdx
-            });
-
-            // Эффект обрезка (падающий кусок)
-            const debrisW = overhang;
-            let debrisX;
-            if (delta > 0) { // Свес справа
-                debrisX = newX + newW/2 + debrisW/2;
-            } else { // Свес слева
-                debrisX = newX - newW/2 - debrisW/2;
-            }
-            createDebris(debrisX, curr.y, debrisW, curr.cIdx);
-            createParticles(newX, curr.y, COLORS[curr.cIdx].c);
-
-            spawnNext();
-        } else {
-            // Промах
-            gameOver();
+        // Центр экрана = w/2.
+        // curr.pos - это смещение от центра, если мы считаем логику так.
+        // Но для простоты: curr.x обновляется в update().
+        
+        const dist = curr.x - prev.x;
+        const absDist = Math.abs(dist);
+        
+        if (absDist > prev.w) {
+            return gameOver();
         }
-    }
 
-    function createDebris(x, y, w, cIdx) {
-        state.debris.push({
-            x: x, y: y, w: w, h: CONFIG.pancakeHeight,
-            cIdx: cIdx, vy: 0, rot: 0, vr: (Math.random() - 0.5) * 0.2
+        // Успех
+        const newW = prev.w - absDist;
+        const newX = prev.x + (dist / 2);
+        
+        state.stack.push({
+            x: newX,
+            y: curr.y,
+            w: newW,
+            c: curr.c
         });
-    }
 
-    function createParticles(x, y, color) {
-        for(let i=0; i<10; i++) {
-            state.particles.push({
-                x: x + (Math.random()-0.5)*40,
-                y: y,
-                vx: (Math.random()-0.5)*10,
-                vy: (Math.random()-0.5)*10,
-                life: 1.0,
-                color: color
-            });
-        }
+        // Обломок
+        state.debris.push({
+            x: dist > 0 ? newX + newW/2 + absDist/2 : newX - newW/2 - absDist/2,
+            y: curr.y,
+            w: absDist,
+            h: CONFIG.h,
+            c: curr.c,
+            vy: 0, rot: 0
+        });
+
+        state.score++;
+        updateScore(state.score);
+        beep(300 + (state.score * 20));
+        
+        spawnPancake();
     }
 
     function gameOver() {
-        state.running = false;
-        playFail();
+        state.phase = 'gameover';
+        beep(100);
         
-        // Эффект падения текущего блина
-        const curr = state.current;
-        createDebris(curr.x, curr.y, curr.w, curr.cIdx);
+        // Падающий текущий блин
+        state.debris.push({
+            x: state.current.x, y: state.current.y,
+            w: state.current.w, h: CONFIG.h, c: state.current.c,
+            vy: 0, rot: 0
+        });
         state.current = null;
 
         setTimeout(() => {
             document.getElementById('final-score').innerText = state.score;
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('score-container').style.display = 'none';
-        }, 500);
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('score-board').classList.add('hidden');
+        }, 800);
     }
 
-    // --- ГЛАВНЫЙ ЦИКЛ ---
-    function update() {
-        if (!state.running) return;
-        
-        // Движение текущего блина
-        if (state.current) {
-            const limitX = (canvas.width / (window.devicePixelRatio || 1));
-            state.current.x += state.current.speed * state.current.dir;
-            
-            // Отскок от краев (с запасом, чтобы не улетал далеко)
-            if (state.current.x > limitX - 50 && state.current.dir > 0) state.current.dir = -1;
-            if (state.current.x < 50 && state.current.dir < 0) state.current.dir = 1;
-        }
-
-        // Плавная камера
-        state.cameraY += (state.targetCameraY - state.cameraY) * 0.1;
+    function updateScore(s) {
+        const el = document.getElementById('score-board');
+        el.innerText = s;
+        el.style.transform = "scale(1.3)";
+        setTimeout(() => el.style.transform = "scale(1)", 100);
     }
 
-    function drawFrame() {
-        const width = canvas.width / (window.devicePixelRatio || 1);
-        const height = canvas.height / (window.devicePixelRatio || 1);
-        
-        ctx.clearRect(0, 0, width, height);
+    // --- ОТРИСОВКА ---
+    function loop() {
+        // Очистка
+        ctx.fillStyle = "#f5f7fa"; // Фон, если градиент CSS не виден
+        ctx.clearRect(0,0,w,h);
+
+        // Движение камеры
+        let targetCam = (state.score * CONFIG.h) - 100;
+        if (targetCam < 0) targetCam = 0;
+        state.cameraY += (targetCam - state.cameraY) * 0.1;
 
         ctx.save();
-        // Смещаем мир вниз по мере роста башни
         ctx.translate(0, state.cameraY);
 
-        // Рисуем стол (фон под башней)
-        const tableY = state.stack[0] ? state.stack[0].y + CONFIG.pancakeHeight/2 : height;
-        ctx.fillStyle = "#8d5524";
-        ctx.fillRect(0, tableY, width, height);
-
         // Рисуем стек
-        state.stack.forEach(p => {
-            drawPancake(p.x, p.y, p.w, p.cIdx);
-        });
+        state.stack.forEach(p => drawRect(p.x, p.y, p.w, CONFIG.h, p.c));
 
         // Рисуем обломки
-        for (let i = state.debris.length - 1; i >= 0; i--) {
-            let d = state.debris[i];
-            d.vy += 0.8; // Гравитация
-            d.y += d.vy;
-            d.rot += d.vr;
-            
+        state.debris.forEach(d => {
+            d.vy += 0.5; d.y += d.vy; d.rot += 0.1;
             ctx.save();
             ctx.translate(d.x, d.y);
             ctx.rotate(d.rot);
-            drawPancake(0, 0, d.w, d.cIdx);
+            drawRect(0, 0, d.w, d.h, d.c);
             ctx.restore();
-
-            if (d.y > height + state.cameraY + 100) state.debris.splice(i, 1);
-        }
+        });
 
         // Рисуем текущий
-        if (state.current) {
-            drawPancake(state.current.x, state.current.y, state.current.w, state.current.cIdx);
-        }
-
-        // Частицы
-        for (let i = state.particles.length - 1; i >= 0; i--) {
-            let p = state.particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.life -= 0.05;
+        if (state.phase === 'playing' && state.current) {
+            // Логика движения
+            const speed = CONFIG.speed + (state.score * 0.1);
+            state.current.pos += speed * state.current.dir;
             
-            ctx.globalAlpha = Math.max(0, p.life);
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
-            ctx.fill();
+            // Границы движения (амплитуда)
+            if (state.current.pos > 300) state.current.dir = -1;
+            if (state.current.pos < -300) state.current.dir = 1;
             
-            if (p.life <= 0) state.particles.splice(i, 1);
+            state.current.x = (w/2) + state.current.pos;
+            
+            drawRect(state.current.x, state.current.y, state.current.w, CONFIG.h, state.current.c);
         }
-        ctx.globalAlpha = 1;
 
         ctx.restore();
+        requestAnimationFrame(loop);
     }
 
-    function drawPancake(x, y, w, cIdx) {
-        const color = COLORS[cIdx % COLORS.length];
-        const h = CONFIG.pancakeHeight;
-        
-        // Тень/Боковина
-        ctx.fillStyle = color.p;
-        ctx.beginPath();
-        ctx.roundRect(x - w/2, y - h/2 + 5, w, h, 10);
-        ctx.fill();
-
-        // Верхняя часть
-        ctx.fillStyle = color.c;
-        ctx.beginPath();
-        ctx.roundRect(x - w/2, y - h/2, w, h-5, 10);
-        ctx.fill();
-        
-        // Блик
-        ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.beginPath();
-        ctx.ellipse(x - w/4, y - h/2 + 5, w/4, 3, 0, 0, Math.PI*2);
-        ctx.fill();
+    function drawRect(x, y, width, height, color) {
+        ctx.fillStyle = color;
+        // Тень
+        ctx.fillRect(x - width/2, y - height/2 + 5, width, height);
+        // Основа
+        ctx.fillStyle = adjustColor(color, 20);
+        ctx.fillRect(x - width/2, y - height/2, width, height - 5);
+        // Обводка
+        ctx.strokeStyle = "rgba(0,0,0,0.1)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - width/2, y - height/2, width, height - 5);
     }
 
-    function loop() {
-        if (!state.running && state.debris.length === 0) return;
-        update();
-        drawFrame();
-        if (state.running || state.debris.length > 0) requestAnimationFrame(loop);
+    // Утилита для осветления цвета
+    function adjustColor(color, amount) {
+        return color; // Упрощено для производительности
     }
-
-    // --- ВВОД ПОЛЬЗОВАТЕЛЯ ---
-    function handleInput(e) {
-        if (e.type !== 'click' && e.cancelable) e.preventDefault(); // Блокируем зум
-        if (state.running) {
-            placePancake();
-        }
-    }
-
-    // Обработчики кнопок
-    document.getElementById('start-btn').addEventListener('click', () => {
-        initAudio(); // Важно: звук активируется здесь
-        resize(); // Обновляем размер перед стартом
-        resetGame();
-    });
-
-    document.getElementById('restart-btn').addEventListener('click', () => {
-        resetGame();
-    });
-
-    // Обработчики игры (экран)
-    const gameArea = document.getElementById('game-container');
-    gameArea.addEventListener('mousedown', handleInput);
-    gameArea.addEventListener('touchstart', handleInput, { passive: false });
-    
-    // Первый ресайз
-    resize();
 
 </script>
 </body>
