@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Башня из блинов</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; color: #333;
+        }
+        #game-container {
+            width: 100%; max-width: 450px; height: 90vh; position: relative; overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); border-radius: 10px; background-color: #fff; margin-top: 10px;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        #score-container {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9); padding: 8px 25px; border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; display: none;
+        }
+        #score { font-size: 32px; font-weight: bold; color: #ff6b6b; }
+        .modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 20px; text-align: center; max-width: 80%;
+        }
+        button {
+            background: #ff9e6d; color: white; border: none; padding: 15px 40px;
+            font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer; margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="margin-top:10px; color:#ff6b6b;">🍽️ Блинный Шеф 🥞</h1>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="score-container"><div id="score">0</div></div>
+        
+        <div id="start-modal" class="modal">
+            <div class="modal-content">
+                <h2>Шеф, пора готовить!</h2>
+                <p>Строй башню под музыку. Жми на экран, чтобы бросить блин! 🎵</p>
+                <button onclick="startGame()">Включить музыку и начать</button>
+            </div>
+        </div>
+
+        <div id="game-over" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h2>Упало!</h2>
+                <p>Ваш счёт:</p>
+                <h1 id="final-score" style="color:#ff6b6b; font-size:48px;">0</h1>
+                <button onclick="startGame()">Попробовать снова</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const scoreContainer = document.getElementById('score-container');
+    
+    const PANCAKE_H = 25;
+    const SPACING = 120;
+    const TYPES = [
+        { c: "#ff6b6b", p: "#ff4757" }, { c: "#ffd166", p: "#eccc68" },
+        { c: "#f7fff7", p: "#ced6e0" }, { c: "#8d5524", p: "#5d3e21" }
+    ];
+
+    let state = {
+        running: false, score: 0, speed: 2.5, stack: [],
+        debris: [], particles: [], current: null, dir: 1,
+        pendingScroll: 0, tableY: 0
+    };
+
+    // --- ЗВУКОВОЙ МОДУЛЬ ---
+    let audioCtx = null;
+    let musicStarted = false;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        if (!musicStarted) {
+            startMusicLoop();
+            musicStarted = true;
+        }
+    }
+
+    function playSplat() {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.frequency.setValueAtTime(120, audioCtx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15);
+        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 0.15);
+    }
+
+    function startMusicLoop() {
+        const tempo = 120;
+        const secondsPerBeat = 60 / tempo;
+        let nextNoteTime = audioCtx.currentTime;
+
+        function scheduleNote() {
+            while (nextNoteTime < audioCtx.currentTime + 0.1) {
+                // Басовая линия (Lo-Fi Bass)
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const freq = [55, 65, 49, 43][Math.floor(nextNoteTime / secondsPerBeat / 4) % 4];
+                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, nextNoteTime);
+                gain.gain.setValueAtTime(0.04, nextNoteTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + secondsPerBeat * 0.8);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(nextNoteTime);
+                osc.stop(nextNoteTime + secondsPerBeat * 0.8);
+
+                // Легкий перкуссионный щелчок (Hi-hat)
+                const noise = audioCtx.createOscillator();
+                const noiseGain = audioCtx.createGain();
+                noise.type = 'square';
+                noise.frequency.setValueAtTime(1000, nextNoteTime);
+                noiseGain.gain.setValueAtTime(0.01, nextNoteTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + 0.05);
+                noise.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noise.start(nextNoteTime);
+                noise.stop(nextNoteTime + 0.05);
+
+                nextNoteTime += secondsPerBeat;
+            }
+            setTimeout(scheduleNote, 25);
+        }
+        scheduleNote();
+    }
+
+    // --- КЛАССЫ ЭФФЕКТОВ ---
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x; this.y = y;
+            this.size = Math.random() * 5 + 2;
+            this.vx = (Math.random() - 0.5) * 8;
+            this.vy = -Math.random() * 5 - 2;
+            this.color = color; this.life = 1;
+        }
+        update() { this.x += this.vx; this.y += this.vy; this.vy += 0.3; this.life -= 0.02; }
+    }
+
+    class Debris {
+        constructor(x, y, w, color) {
+            this.x = x; this.y = y; this.w = w; this.color = color;
+            this.vy = 0; this.rot = 0; this.rs = (Math.random()-0.5)*0.2;
+        }
+        update() { this.vy += 0.8; this.y += this.vy; this.rot += this.rs; }
+    }
+
+    // --- ЛОГИКА ИГРЫ ---
+    function startGame() {
+        initAudio(); // Важно: запуск звука по клику
+        document.getElementById('start-modal').style.display = 'none';
+        document.getElementById('game-over').style.display = 'none';
+        scoreContainer.style.display = 'block';
+        
+        state = {
+            running: true, score: 0, speed: 2.5, dir: 1,
+            stack: [{ x: canvas.width/2, y: canvas.height - 100, w: 180, type: 0 }],
+            debris: [], particles: [], pendingScroll: 0, tableY: canvas.height - 100,
+            current: null
+        };
+        scoreElement.textContent = "0";
+        spawnNext();
+    }
+
+    function spawnNext() {
+        const last = state.stack[state.stack.length-1];
+        state.current = {
+            x: canvas.width/2, y: last.y - SPACING, w: last.w,
+            type: Math.floor(Math.random() * TYPES.length), falling: false
+        };
+    }
+
+    function handleInput() {
+        if (!state.running || state.current.falling) return;
+        state.current.falling = true;
+    }
+
+    function update() {
+        if (!state.running) return;
+
+        if (state.pendingScroll > 0) {
+            let s = Math.min(state.pendingScroll, 5);
+            state.tableY += s;
+            state.stack.forEach(p => p.y += s);
+            state.debris.forEach(d => d.y += s);
+            state.current.y += s;
+            state.pendingScroll -= s;
+        }
+
+        if (!state.current.falling) {
+            state.current.x += state.speed * state.dir;
+            if (state.current.x > canvas.width - state.current.w/2 || state.current.x < state.current.w/2) state.dir *= -1;
+        } else {
+            state.current.y += 10;
+            const last = state.stack[state.stack.length-1];
+            if (state.current.y + PANCAKE_H/2 >= last.y - PANCAKE_H/2) {
+                const diff = state.current.x - last.x;
+                if (Math.abs(diff) >= last.w) {
+                    state.running = false;
+                    document.getElementById('game-over').style.display = 'flex';
+                    document.getElementById('final-score').textContent = state.score;
+                } else {
+                    const newW = last.w - Math.abs(diff);
+                    const newX = last.x + diff/2;
+                    
+                    if (diff > 0) state.debris.push(new Debris(newX + newW/2 + (diff/2), last.y - PANCAKE_H, diff, TYPES[state.current.type].c));
+                    else if (diff < 0) state.debris.push(new Debris(newX - newW/2 + (diff/2), last.y - PANCAKE_H, Math.abs(diff), TYPES[state.current.type].c));
+
+                    state.stack.push({ x: newX, y: last.y - PANCAKE_H, w: newW, type: state.current.type });
+                    state.score++;
+                    scoreElement.textContent = state.score;
+                    state.speed += 0.1;
+                    
+                    playSplat();
+                    for(let i=0; i<12; i++) state.particles.push(new Particle(newX, last.y - PANCAKE_H, TYPES[state.current.type].p));
+                    
+                    if (state.stack[state.stack.length-1].y < 400) state.pendingScroll += SPACING;
+                    spawnNext();
+                }
+            }
+        }
+        state.debris.forEach((d, i) => { d.update(); if (d.y > canvas.height + 100) state.debris.splice(i, 1); });
+        state.particles.forEach((p, i) => { p.update(); if (p.life <= 0) state.particles.splice(i, 1); });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#8B4513";
+        ctx.fillRect(0, state.tableY + PANCAKE_H/2, canvas.width, 500);
+
+        state.stack.forEach(p => {
+            ctx.fillStyle = TYPES[p.type].c;
+            ctx.strokeStyle = "#5d3e21"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.roundRect(p.x - p.w/2, p.y - PANCAKE_H/2, p.w, PANCAKE_H, 8); ctx.fill(); ctx.stroke();
+        });
+
+        state.debris.forEach(d => {
+            ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+            ctx.fillStyle = d.color; ctx.beginPath(); ctx.roundRect(-d.w/2, -PANCAKE_H/2, d.w, PANCAKE_H, 5); ctx.fill(); ctx.restore();
+        });
+
+        if (state.current) {
+            ctx.fillStyle = TYPES[state.current.type].c;
+            ctx.beginPath(); ctx.roundRect(state.current.x - state.current.w/2, state.current.y - PANCAKE_H/2, state.current.w, PANCAKE_H, 8); ctx.fill(); ctx.stroke();
+        }
+
+        state.particles.forEach(p => {
+            ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        update();
+        requestAnimationFrame(draw);
+    }
+
+    canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+    window.addEventListener('mousedown', handleInput);
+    window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); }, {passive: false});
+    draw();
+</script>
+</body>
+</html>
