@@ -3,154 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>☀️ БЛИННЫЙ ШУТЕР · Масленица</title>
+    <title>☀️ БЛИННЫЙ ШУТЕР</title>
     <style>
-        /* ===== АДАПТИВНЫЙ МОБИЛЬНЫЙ ДИЗАЙН ===== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            touch-action: none;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
+        body { 
+            height: 100vh; height: 100dvh; width: 100vw; 
+            overflow: hidden; background: #fad0a5; font-family: sans-serif; 
+            position: fixed;
         }
-
-        body {
-            height: 100vh;
-            height: 100dvh; /* Динамическая высота для мобильных */
-            width: 100vw;
-            overflow: hidden;
-            font-family: 'Segoe UI', 'Roboto', sans-serif;
-            background: #fad0a5;
-            position: fixed; /* Фиксация от скролла */
-        }
-
         .game-wrapper {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            max-width: 500px; /* Оптимально для смартфонов */
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            background: linear-gradient(rgba(255, 222, 191, 0.9), rgba(255, 228, 204, 0.9)), 
-                        url('фон_2.jpeg') center/cover no-repeat;
-            padding-top: env(safe-area-inset-top, 10px);
-            padding-bottom: env(safe-area-inset-bottom, 10px);
-            border-left: 2px solid #d2691e;
-            border-right: 2px solid #d2691e;
+            position: relative; width: 100%; height: 100%;
+            max-width: 500px; margin: 0 auto;
+            display: flex; flex-direction: column;
+            background: #fff4e6; /* Запасной фон */
+            border-left: 2px solid #d2691e; border-right: 2px solid #d2691e;
         }
-
-        /* Шапка с уменьшенными размерами для мобильных */
         .header {
-            flex: 0 0 auto;
-            height: 70px;
-            background: linear-gradient(165deg, #ffecd2, #fcdec2);
-            border: 4px solid #c28a3b;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            margin: 5px 10px;
-            border-radius: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            z-index: 20;
+            flex: 0 0 auto; height: 70px; margin: 10px;
+            background: #fff; border: 3px solid #c28a3b;
+            border-radius: 15px; display: flex; justify-content: space-around; align-items: center;
         }
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 10px; font-weight: bold; color: #7b3f00; }
+        .stat-value { font-size: 18px; font-weight: 900; color: #a0522d; }
         
-        .stat-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        .canvas-container { flex: 1; position: relative; width: 100%; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; background: rgba(255,255,255,0.1); }
+
+        .modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+            z-index: 100;
         }
-
-        .stat-label { font-size: 10px; color: #7b3f00; font-weight: 800; }
-        .stat-value { font-size: 20px; font-weight: 900; color: #a0522d; }
-
-        .lives-row { display: flex; gap: 4px; }
-        .life-dot {
-            width: 14px;
-            height: 14px;
-            background: radial-gradient(circle at 30% 30%, #ffc068, #d41a1a);
-            border-radius: 50%;
-            box-shadow: 0 2px 0 #9c5a2c;
-        }
-        .life-dot.lost { background: #bbb; box-shadow: none; opacity: 0.5; transform: scale(0.8); }
-
-        .canvas-container {
-            flex: 1;
-            position: relative;
-            width: 100%;
-            margin-top: 5px;
-            background: rgba(255, 235, 190, 0.2);
-            overflow: hidden;
-        }
-
-        canvas { display: block; width: 100%; height: 100%; }
-
-        /* Кнопки управления адаптированы под пальцы */
-        .pause-button, .sound-toggle {
-            position: absolute;
-            bottom: 20px;
-            width: 55px;
-            height: 55px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            z-index: 50;
-            border: 3px solid #ffe28c;
-            box-shadow: 0 5px 0 #9c5a2b;
-        }
-        .pause-button { left: 15px; background: #f57c00; }
-        .sound-toggle { right: 15px; background: #e68a2e; }
-        .pause-button:active, .sound-toggle:active { transform: translateY(4px); box-shadow: 0 1px 0 #9c5a2b; }
-
-        /* Модальные окна */
-        .modal, .modal-pause {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(70, 40, 15, 0.8);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 100; backdrop-filter: blur(5px);
-        }
-
         .modal-content {
-            background: #fff7e6;
-            width: 90%;
-            padding: 25px 15px;
-            border-radius: 30px;
-            text-align: center;
-            border: 6px solid #ffb347;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: white; padding: 30px; border-radius: 20px; text-align: center; width: 80%;
         }
-
-        .flavors-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 15px 0;
-        }
-
-        .flavor-item {
-            background: rgba(255, 235, 200, 0.8);
-            padding: 8px 4px;
-            border-radius: 15px;
-            border: 2px solid #d2691e;
-        }
-
-        .flavor-preview { width: 30px; height: 30px; margin: 0 auto 5px; background-size: cover; }
-        .flavor-name { font-size: 9px; font-weight: 800; color: #6b3f00; }
-
         button {
-            background: #f57c00;
-            border: none; color: white;
-            padding: 15px 30px; font-size: 20px;
-            border-radius: 40px; font-weight: 900;
-            box-shadow: 0 8px 0 #b85a1a;
-            margin-top: 10px;
+            background: #f57c00; color: white; border: none; padding: 15px 30px;
+            font-size: 20px; border-radius: 30px; margin-top: 20px; font-weight: bold;
         }
-
         .hidden { display: none !important; }
     </style>
 </head>
@@ -159,340 +50,286 @@
     <div class="game-wrapper">
         <div class="header">
             <div class="stat-item">
-                <span class="stat-label">🥞 СЧЕТ</span>
-                <span class="stat-value" id="score">0</span>
+                <div class="stat-label">🥞 СЧЕТ</div>
+                <div class="stat-value" id="score">0</div>
             </div>
             <div class="stat-item">
-                <span class="stat-label">🍯 ЖИЗНИ</span>
-                <div class="lives-row" id="lives-container"></div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">🏆 РЕКОРД</span>
-                <span class="stat-value" id="high-score">0</span>
+                <div class="stat-label">🏆 РЕКОРД</div>
+                <div class="stat-value" id="high-score">0</div>
             </div>
         </div>
 
-        <div class="canvas-container" id="canvas-container">
+        <div class="canvas-container" id="container">
             <canvas id="gameCanvas"></canvas>
-            
-            <div id="pauseBtn" class="pause-button">⏸</div>
-            <div id="soundToggle" class="sound-toggle">♬</div>
-
             <div id="modal" class="modal">
                 <div class="modal-content">
-                    <h1 style="color: #b6491a; font-size: 24px;">☀️ МАСЛЕНИЦА</h1>
-                    <p style="margin: 10px 0; font-size: 14px;">Стреляй блинами, собирай по 3 в ряд!</p>
-                    
-                    <div id="flavors-section">
-                        <div class="flavors-grid">
-                            <div class="flavor-item"><div class="flavor-preview" style="background-image: url('honey.png')"></div><span class="flavor-name">МЁД</span></div>
-                            <div class="flavor-item"><div class="flavor-preview" style="background-image: url('Strawberry.png')"></div><span class="flavor-name">ЯГОДЫ</span></div>
-                            <div class="flavor-item"><div class="flavor-preview" style="background-image: url('milk.png')"></div><span class="flavor-name">СГУЩЁНКА</span></div>
-                            <div class="flavor-item"><div class="flavor-preview" style="background-image: url('cheese.png')"></div><span class="flavor-name">СЫР</span></div>
-                            <div class="flavor-item"><div class="flavor-preview" style="background-image: url('meat.png')"></div><span class="flavor-name">МЯСО</span></div>
-                            <div class="flavor-item"><div style="font-size: 20px;">💣</div><span class="flavor-name">БОМБА</span></div>
-                        </div>
-                    </div>
-                    
-                    <button id="action-btn">ИГРАТЬ</button>
-                </div>
-            </div>
-
-            <div id="pauseModal" class="modal-pause hidden">
-                <div class="modal-content">
-                    <h2>ПАУЗА</h2>
-                    <button id="resumeBtn">ПРОДОЛЖИТЬ</button>
+                    <h1>☀️ МАСЛЕНИЦА</h1>
+                    <p>Стреляй по блинам!</p>
+                    <button id="start-btn">ИГРАТЬ</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        (function(){
-            const canvas = document.getElementById('gameCanvas');
-            const container = document.getElementById('canvas-container');
-            const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
 
-            // Адаптивные переменные
-            let RADIUS, DIAMETER, SPEED, offsetX, cols, rows;
-            const MAX_LIVES = 5;
+        let RADIUS, DIAMETER, cols, rows, SPEED;
+        let grid = [];
+        let score = 0;
+        let state = 'MENU';
+        let shooter = { x: 0, y: 0, type: 0, next: 0, ball: null };
+        let isAiming = false, aimAngle = -Math.PI / 2;
 
-            const PANCAKE_IMAGES = ['honey.png', 'Strawberry.png', 'milk.png', 'cheese.png', 'meat.png'];
-            let pancakeImgs = [];
-            let bombImg = new Image();
-            bombImg.src = 'bomb.png';
+        const TYPES = [
+            { c: '#FFD700', b: '#B8860B', img: 'honey.png' },
+            { c: '#FF69B4', b: '#C71585', img: 'Strawberry.png' },
+            { c: '#F0F8FF', b: '#4682B4', img: 'milk.png' },
+            { c: '#FFFACD', b: '#DAA520', img: 'cheese.png' },
+            { c: '#8B4513', b: '#5D2E0A', img: 'meat.png' }
+        ];
 
-            PANCAKE_IMAGES.forEach(src => {
-                let img = new Image();
-                img.src = src;
-                pancakeImgs.push(img);
-            });
+        const images = TYPES.map(t => {
+            const img = new Image();
+            img.src = t.img;
+            return img;
+        });
 
-            const PANCAKE_TYPES = [
-                { bgColor: '#ffecc2', border: '#fa9a00' },
-                { bgColor: '#ffebed', border: '#e91e63' },
-                { bgColor: '#f0f4f8', border: '#2196f3' },
-                { bgColor: '#fff9c4', border: '#fbc02d' },
-                { bgColor: '#efebe9', border: '#795548' }
-            ];
+        function resize() {
+            const container = document.getElementById('container');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
             
-            const BOMB_TYPE = 99;
-            let grid = [], particles = [], falling = [];
-            let score = 0, lives = MAX_LIVES, state = 'MENU';
-            let shooter = { x: 0, y: 0, curr: 0, next: 0, ball: null };
-            let isAiming = false, aimAngle = -Math.PI / 2;
-            let soundEnabled = true;
+            cols = 8;
+            DIAMETER = canvas.width / cols;
+            RADIUS = DIAMETER / 2;
+            rows = Math.floor(canvas.height / DIAMETER);
+            
+            shooter.x = canvas.width / 2;
+            shooter.y = canvas.height - (DIAMETER * 1.5);
+            SPEED = canvas.height * 0.03;
 
-            function resize() {
-                canvas.width = container.offsetWidth;
-                canvas.height = container.offsetHeight;
-                
-                // Адаптация размера: 8 колонок на любой экран
-                cols = 8; 
-                DIAMETER = canvas.width / cols;
-                RADIUS = DIAMETER / 2;
-                offsetX = 0;
-                rows = Math.floor(canvas.height / DIAMETER);
-                
-                shooter.x = canvas.width / 2;
-                shooter.y = canvas.height - (DIAMETER * 1.2);
-                SPEED = canvas.height * 0.04; // Скорость зависит от высоты экрана
+            // Пересчитываем позиции в сетке при ресайзе
+            for(let r=0; r<grid.length; r++) {
+                for(let c=0; c<cols; c++) {
+                    if(grid[r][c]) {
+                        grid[r][c].x = c * DIAMETER + RADIUS;
+                        grid[r][c].y = r * DIAMETER + RADIUS;
+                    }
+                }
             }
+        }
 
-            function initGame() {
-                resize();
-                score = 0; lives = MAX_LIVES;
-                state = 'PLAYING';
-                grid = [];
-                for (let r = 0; r < rows; r++) grid[r] = new Array(cols).fill(null);
-                for (let r = 0; r < 5; r++) createRow(r);
-                shooter.curr = randType();
-                shooter.next = randType();
-                updateUI();
-                modal.classList.add('hidden');
+        function init() {
+            score = 0;
+            scoreEl.innerText = score;
+            grid = [];
+            for (let r = 0; r < rows; r++) {
+                grid[r] = new Array(cols).fill(null);
             }
-
-            function createRow(r) {
+            // Заполняем начальные 4 ряда
+            for (let r = 0; r < 4; r++) {
                 for (let c = 0; c < cols; c++) {
-                    if (Math.random() > 0.2) {
+                    if (Math.random() > 0.3) {
                         grid[r][c] = {
-                            type: Math.random() < 0.05 ? BOMB_TYPE : randType(),
+                            type: Math.floor(Math.random() * TYPES.length),
                             x: c * DIAMETER + RADIUS,
                             y: r * DIAMETER + RADIUS
                         };
                     }
                 }
             }
+            shooter.type = Math.floor(Math.random() * TYPES.length);
+            shooter.next = Math.floor(Math.random() * TYPES.length);
+            state = 'PLAYING';
+            document.getElementById('modal').classList.add('hidden');
+        }
 
-            function randType() { return Math.floor(Math.random() * PANCAKE_IMAGES.length); }
+        function drawBall(x, y, type, r = RADIUS) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, r - 3, 0, Math.PI * 2);
+            
+            // Сначала фон (если картинка не прогрузится)
+            ctx.fillStyle = TYPES[type].c;
+            ctx.fill();
 
-            // Логика отрисовки
-            function drawBall(x, y, type, r = RADIUS) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(x, y, r - 2, 0, Math.PI * 2);
-                
-                if (type === BOMB_TYPE) {
-                    ctx.fillStyle = '#333';
-                    ctx.fill();
-                    ctx.fillStyle = 'white';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('💣', x, y + 5);
-                } else {
-                    ctx.clip();
-                    // Фон
-                    ctx.fillStyle = PANCAKE_TYPES[type].bgColor;
-                    ctx.fill();
-                    // Картинка
-                    if (pancakeImgs[type].complete) {
-                        ctx.drawImage(pancakeImgs[type], x - r, y - r, r * 2, r * 2);
-                    }
-                    // Обводка
-                    ctx.strokeStyle = PANCAKE_TYPES[type].border;
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-                ctx.restore();
+            // Картинка
+            if (images[type].complete && images[type].naturalWidth > 0) {
+                ctx.clip();
+                ctx.drawImage(images[type], x - r, y - r, r * 2, r * 2);
             }
 
-            function update() {
-                if (state !== 'PLAYING') return;
+            ctx.strokeStyle = TYPES[type].b;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
 
-                if (shooter.ball) {
-                    let b = shooter.ball;
-                    b.x += b.vx;
-                    b.y += b.vy;
+        function update() {
+            if (state !== 'PLAYING') return;
 
-                    // Отскоки от стен
-                    if (b.x < RADIUS || b.x > canvas.width - RADIUS) b.vx *= -1;
+            if (shooter.ball) {
+                const b = shooter.ball;
+                b.x += b.vx;
+                b.y += b.vy;
 
-                    // Проверка столкновения
-                    if (b.y < RADIUS) { snap(b); }
-                    else {
-                        for (let r = 0; r < rows; r++) {
-                            for (let c = 0; c < cols; c++) {
-                                let cell = grid[r][c];
-                                if (cell && Math.hypot(b.x - cell.x, b.y - cell.y) < DIAMETER * 0.8) {
-                                    snap(b); return;
-                                }
+                // Стены
+                if (b.x < RADIUS || b.x > canvas.width - RADIUS) b.vx *= -1;
+
+                // Столкновение с потолком
+                if (b.y < RADIUS) {
+                    snap(b);
+                } else {
+                    // Столкновение с другими блинами
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const cell = grid[r][c];
+                            if (cell && Math.hypot(b.x - cell.x, b.y - cell.y) < DIAMETER * 0.85) {
+                                snap(b);
+                                return;
                             }
                         }
                     }
-                    if (b.y < -RADIUS) resetShot();
                 }
-            }
-
-            function snap(b) {
-                let c = Math.round((b.x - RADIUS) / DIAMETER);
-                let r = Math.round((b.y - RADIUS) / DIAMETER);
-                c = Math.max(0, Math.min(c, cols - 1));
-                r = Math.max(0, Math.min(r, rows - 1));
-
-                if (grid[r][c]) r++; // Если занято, спускаемся ниже
                 
-                if (r < rows) {
-                    grid[r][c] = { type: b.type, x: c * DIAMETER + RADIUS, y: r * DIAMETER + RADIUS };
-                    if (!checkMatches(r, c, b.type)) {
-                        lives--;
-                        if (lives <= 0) { addNewRow(); lives = MAX_LIVES; }
-                    }
-                }
-                resetShot();
+                // Вылет за границы (защита от багов)
+                if(b.y < -RADIUS || b.y > canvas.height) shooter.ball = null;
             }
+        }
 
-            function checkMatches(r, c, type) {
-                let matched = getMatches(r, c, type, []);
-                if (matched.length >= 3) {
-                    matched.forEach(m => grid[m.r][m.c] = null);
-                    score += matched.length * 10;
-                    updateUI();
-                    return true;
-                }
-                return false;
-            }
+        function snap(b) {
+            let c = Math.round((b.x - RADIUS) / DIAMETER);
+            let r = Math.round((b.y - RADIUS) / DIAMETER);
+            c = Math.max(0, Math.min(c, cols - 1));
+            r = Math.max(0, Math.min(r, rows - 1));
 
-            function getMatches(r, c, type, found) {
-                let key = `${r},${c}`;
-                if (r < 0 || r >= rows || c < 0 || c >= cols || !grid[r][c] || grid[r][c].type !== type || found.includes(key)) return [];
-                found.push(key);
-                let res = [{r, c}];
-                [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
-                    res = res.concat(getMatches(r+d[0], c+d[1], type, found));
-                });
-                return res;
-            }
-
-            function addNewRow() {
-                for (let r = rows - 1; r > 0; r--) grid[r] = [...grid[r-1]];
-                grid[0] = new Array(cols).fill(null);
-                createRow(0);
-                // Проверка проигрыша
-                if (grid[rows-2].some(cell => cell !== null)) endGame();
-            }
-
-            function resetShot() {
-                shooter.ball = null;
-                shooter.curr = shooter.next;
-                shooter.next = randType();
-                updateUI();
-            }
-
-            function draw() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                
-                // Сетка (фон)
-                ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-                for(let i=0; i<cols; i++) ctx.strokeRect(i*DIAMETER, 0, DIAMETER, canvas.height);
-
-                // Отрисовка всех блинов
-                for (let r = 0; r < rows; r++) {
-                    for (let c = 0; c < cols; c++) {
-                        if (grid[r][c]) drawBall(grid[r][c].x, grid[r][c].y, grid[r][c].type);
-                    }
-                }
-
-                // Прицел
-                if (isAiming && !shooter.ball) {
-                    ctx.beginPath();
-                    ctx.setLineDash([5, 10]);
-                    ctx.moveTo(shooter.x, shooter.y);
-                    ctx.lineTo(shooter.x + Math.cos(aimAngle) * 100, shooter.y + Math.sin(aimAngle) * 100);
-                    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                }
-
-                // Пушка
-                drawBall(shooter.x, shooter.y, shooter.curr);
-                
-                // Снаряд в полете
-                if (shooter.ball) drawBall(shooter.ball.x, shooter.ball.y, shooter.ball.type);
-            }
-
-            function updateUI() {
-                document.getElementById('score').innerText = score;
-                const container = document.getElementById('lives-container');
-                container.innerHTML = '';
-                for(let i=0; i<MAX_LIVES; i++) {
-                    let dot = document.createElement('div');
-                    dot.className = 'life-dot' + (i >= lives ? ' lost' : '');
-                    container.appendChild(dot);
-                }
-            }
-
-            function endGame() {
-                state = 'END';
-                alert("Масленица закончилась! Счет: " + score);
-                location.reload();
-            }
-
-            // События управления
-            canvas.addEventListener('pointerdown', e => {
-                if (state !== 'PLAYING') return;
-                isAiming = true;
-                handleMove(e);
-            });
-
-            canvas.addEventListener('pointermove', e => { if (isAiming) handleMove(e); });
-            canvas.addEventListener('pointerup', () => {
-                if (isAiming && !shooter.ball) {
-                    shooter.ball = {
-                        x: shooter.x, y: shooter.y,
-                        vx: Math.cos(aimAngle) * SPEED,
-                        vy: Math.sin(aimAngle) * SPEED,
-                        type: shooter.curr
+            // Ищем ближайшую свободную ячейку
+            if (r >= 0 && r < rows) {
+                if (grid[r][c]) r++; 
+                if (r < rows && !grid[r][c]) {
+                    grid[r][c] = { 
+                        type: b.type, 
+                        x: c * DIAMETER + RADIUS, 
+                        y: r * DIAMETER + RADIUS 
                     };
+                    checkMatch(r, c, b.type);
                 }
-                isAiming = false;
-            });
-
-            function handleMove(e) {
-                const rect = canvas.getBoundingClientRect();
-                const tx = e.clientX - rect.left;
-                const ty = e.clientY - rect.top;
-                aimAngle = Math.atan2(ty - shooter.y, tx - shooter.x);
             }
 
-            document.getElementById('action-btn').onclick = initGame;
-            document.getElementById('pauseBtn').onclick = () => {
-                state = state === 'PLAYING' ? 'PAUSED' : 'PLAYING';
-                document.getElementById('pauseModal').classList.toggle('hidden');
-            };
-            document.getElementById('resumeBtn').onclick = () => {
-                state = 'PLAYING';
-                document.getElementById('pauseModal').classList.add('hidden');
-            };
+            shooter.ball = null;
+            shooter.type = shooter.next;
+            shooter.next = Math.floor(Math.random() * TYPES.length);
+            
+            // Проверка на проигрыш (если блины слишком низко)
+            if (grid[rows - 2].some(cell => cell !== null)) {
+                state = 'MENU';
+                document.getElementById('modal').classList.remove('hidden');
+            }
+        }
 
-            function loop() {
+        function checkMatch(r, c, type) {
+            const matches = [];
+            const visited = new Set();
+            const queue = [[r, c]];
+            visited.add(`${r},${c}`);
+
+            while (queue.length > 0) {
+                const [currR, currC] = queue.shift();
+                matches.push([currR, currC]);
+
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    const nr = currR + dr, nc = currC + dc;
+                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+                        grid[nr][nc] && grid[nr][nc].type === type &&
+                        !visited.has(`${nr},${nc}`)) {
+                        visited.add(`${nr},${nc}`);
+                        queue.push([nr, nc]);
+                    }
+                });
+            }
+
+            if (matches.length >= 3) {
+                matches.forEach(([mr, mc]) => grid[mr][mc] = null);
+                score += matches.length * 10;
+                scoreEl.innerText = score;
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Сетка
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (grid[r][c]) drawBall(grid[r][c].x, grid[r][c].y, grid[r][c].type);
+                }
+            }
+
+            // Линия прицела
+            if (isAiming && !shooter.ball && state === 'PLAYING') {
+                ctx.beginPath();
+                ctx.setLineDash([5, 10]);
+                ctx.moveTo(shooter.x, shooter.y);
+                ctx.lineTo(shooter.x + Math.cos(aimAngle) * 100, shooter.y + Math.sin(aimAngle) * 100);
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Пушка
+            if (state === 'PLAYING') {
+                drawBall(shooter.x, shooter.y, shooter.type);
+                // Превью следующего
+                drawBall(shooter.x + 40, shooter.y + 10, shooter.next, RADIUS * 0.6);
+            }
+
+            // Снаряд
+            if (shooter.ball) {
+                drawBall(shooter.ball.x, shooter.ball.y, shooter.ball.type);
+            }
+
+            requestAnimationFrame(() => {
                 update();
                 draw();
-                requestAnimationFrame(loop);
-            }
+            });
+        }
 
-            window.onresize = resize;
-            resize();
-            loop();
-        })();
+        function handleInput(e) {
+            if (state !== 'PLAYING') return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches?.[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches?.[0].clientY) - rect.top;
+            aimAngle = Math.atan2(y - shooter.y, x - shooter.x);
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            isAiming = true;
+            handleInput(e);
+        });
+        canvas.addEventListener('pointermove', (e) => {
+            if (isAiming) handleInput(e);
+        });
+        canvas.addEventListener('pointerup', () => {
+            if (isAiming && !shooter.ball && state === 'PLAYING') {
+                shooter.ball = {
+                    x: shooter.x,
+                    y: shooter.y,
+                    vx: Math.cos(aimAngle) * SPEED,
+                    vy: Math.sin(aimAngle) * SPEED,
+                    type: shooter.type
+                };
+            }
+            isAiming = false;
+        });
+
+        document.getElementById('start-btn').onclick = init;
+        window.addEventListener('resize', resize);
+
+        resize();
+        draw(); // Запускаем цикл отрисовки
     </script>
 </body>
 </html>
