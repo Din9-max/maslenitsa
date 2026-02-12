@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>☀️ БЛИННЫЙ ШУТЕР: Финал</title>
+    <title>☀️ БЛИННЫЙ ШУТЕР</title>
     <style>
-        /* ===== СТИЛИ ===== */
         * {
             margin: 0; padding: 0; box-sizing: border-box;
             touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent;
@@ -79,7 +78,6 @@
         .control-btn:active { transform: translateY(4px); box-shadow: none; }
         .muted { filter: grayscale(1); opacity: 0.7; }
         
-        /* Иконки начинок */
         .flavors-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 10px 0; }
         .flavor-icon { width: 40px; height: 40px; background-size: cover; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
     </style>
@@ -135,12 +133,10 @@
             const container = document.getElementById('canvas-container');
             const ctx = canvas.getContext('2d', { alpha: false });
 
-            // Переменные
             let RADIUS, DIAMETER, SPEED;
             const COLUMNS_MOBILE = 9;  
             const MAX_LIVES = 5;
 
-            // Изображения
             const PANCAKE_IMAGES = ['honey.png', 'Strawberry.png', 'milk.png', 'cheese.png', 'meat.png'];
             const BOMB_IMAGE = 'bomb.png';
             
@@ -156,7 +152,6 @@
             let pancakeImgs = [];
             PANCAKE_IMAGES.forEach(src => { let img = new Image(); img.src = src; pancakeImgs.push(img); });
 
-            // Состояние
             let grid = [], particles = [], falling = [];
             let rows = 0, cols = 0, offsetX = 0;
             let score = 0, lives = MAX_LIVES, highScore = localStorage.getItem('blini_hs') || 0;
@@ -198,7 +193,6 @@
                 miss: () => playTone(150, 'triangle', 0.3)
             };
 
-            // === АДАПТИВНОСТЬ ===
             function resize() {
                 const rect = container.getBoundingClientRect();
                 canvas.width = rect.width;
@@ -215,7 +209,6 @@
                 shooter.y = canvas.height - RADIUS * 2.5;
             }
 
-            // === ИГРОВОЙ ЦИКЛ ===
             function initGame() {
                 tryResumeAudio();
                 resize();
@@ -249,7 +242,6 @@
             function update() {
                 if (state !== 'PLAYING') return;
 
-                // Движение шара
                 if (shooter.ball) {
                     let b = shooter.ball;
                     const steps = 6;
@@ -257,24 +249,15 @@
                         b.x += b.vx / steps;
                         b.y += b.vy / steps;
 
-                        // Стены
                         if (b.x < RADIUS) { b.x = RADIUS; b.vx *= -1; }
                         if (b.x > canvas.width - RADIUS) { b.x = canvas.width - RADIUS; b.vx *= -1; }
                         
-                        // Потолок
-                        if (b.y < RADIUS) { b.y = RADIUS; snapBall(b, -1, -1); return; } // -1 значит "потолок"
-                        
-                        // Столкновение
-                        let hit = checkCollision(b);
-                        if (hit) {
-                            snapBall(b, hit.r, hit.c); // Передаем координаты того, в кого врезались
-                            return;
-                        }
+                        if (b.y < RADIUS) { b.y = RADIUS; snapBall(b); return; }
+                        if (checkCollision(b)) return;
                     }
                     if (b.y > canvas.height + RADIUS) resetShot();
                 }
 
-                // Эффекты
                 for (let i = particles.length - 1; i >= 0; i--) {
                     let p = particles[i];
                     p.x += p.vx; p.y += p.vy; p.life -= 0.03; p.vy += 0.5;
@@ -287,78 +270,45 @@
                 }
             }
 
-            // === УЛУЧШЕННАЯ ФИЗИКА ===
             function checkCollision(b) {
                 let startR = Math.floor((b.y - RADIUS) / DIAMETER) - 1;
                 let endR = startR + 3;
-                
                 for (let r = Math.max(0, startR); r < Math.min(rows, endR); r++) {
                     for (let c = 0; c < cols; c++) {
                         let cell = grid[r]?.[c];
                         if (cell) {
                             let distSq = (b.x - cell.x)**2 + (b.y - cell.y)**2;
-                            // 0.85 диаметра - оптимально для "протискивания"
-                            if (distSq < (DIAMETER * 0.85)**2) {
-                                return { r: r, c: c }; // Возвращаем, в кого попали
+                            if (distSq < (DIAMETER * 0.9)**2) {
+                                snapBall(b);
+                                return true;
                             }
                         }
                     }
                 }
-                return null;
+                return false;
             }
 
-            // УМНАЯ ПАРКОВКА ШАРА
-            function snapBall(b, hitR, hitC) {
-                let bestR = -1, bestC = -1;
-                let minDist = Infinity;
+            function snapBall(b) {
+                let c = Math.round((b.x - offsetX - RADIUS) / DIAMETER);
+                let r = Math.round((b.y - RADIUS) / DIAMETER);
+                c = Math.max(0, Math.min(c, cols - 1));
+                r = Math.max(0, Math.min(r, rows - 1));
 
-                // Если ударились в шар, ищем свободное место ТОЛЬКО вокруг него
-                if (hitR !== -1) {
-                    let neighbors = [
-                        {r: hitR, c: hitC - 1}, {r: hitR, c: hitC + 1}, 
-                        {r: hitR + 1, c: hitC}, {r: hitR - 1, c: hitC}
-                    ];
-                    // Добавляем диагонали для угловых ударов
-                    neighbors.push({r:hitR+1, c:hitC-1}, {r:hitR+1, c:hitC+1}, {r:hitR-1, c:hitC-1}, {r:hitR-1, c:hitC+1});
+                if (grid[r] && grid[r][c]) r++; 
+                if (r >= rows) return endGame();
 
-                    neighbors.forEach(n => {
-                        if (n.r >= 0 && n.r < rows && n.c >= 0 && n.c < cols && (!grid[n.r] || !grid[n.r][n.c])) {
-                            let cellX = offsetX + n.c * DIAMETER + RADIUS;
-                            let cellY = n.r * DIAMETER + RADIUS;
-                            let dist = (b.x - cellX)**2 + (b.y - cellY)**2;
-                            if (dist < minDist) { minDist = dist; bestR = n.r; bestC = n.c; }
-                        }
-                    });
-                } 
+                if (!grid[r]) grid[r] = new Array(cols).fill(null);
+                addBall(r, c, b.type);
                 
-                // Если не нашли место (или удар в потолок), используем обычное округление
-                if (bestR === -1) {
-                    bestC = Math.round((b.x - offsetX - RADIUS) / DIAMETER);
-                    bestR = Math.round((b.y - RADIUS) / DIAMETER);
-                }
-
-                // Защита границ
-                bestC = Math.max(0, Math.min(bestC, cols - 1));
-                bestR = Math.max(0, Math.min(bestR, rows - 1));
-                
-                // Если место всё равно занято (редкий случай), сдвигаем вниз
-                if (grid[bestR] && grid[bestR][bestC]) bestR++; 
-                if (bestR >= rows) return endGame();
-
-                // Ставим шар
-                if (!grid[bestR]) grid[bestR] = new Array(cols).fill(null);
-                addBall(bestR, bestC, b.type);
-                
-                // Проверка взрывов и совпадений
                 let hitBomb = false;
-                getNeighbors(bestR, bestC).forEach(n => {
+                getNeighbors(r, c).forEach(n => {
                     if (grid[n.r][n.c].type === BOMB_TYPE) { explode(n.r, n.c); hitBomb = true; }
                 });
 
                 if (!hitBomb) {
-                    if (b.type === BOMB_TYPE) explode(bestR, bestC);
+                    if (b.type === BOMB_TYPE) explode(r, c);
                     else {
-                        let matches = findMatches(bestR, bestC, b.type, []);
+                        let matches = findMatches(r, c, b.type, []);
                         if (matches.length >= 3) {
                             sounds.pop(); removeBalls(matches); score += matches.length * 10; checkFloating();
                         } else {
@@ -412,7 +362,6 @@
             }
 
             function checkFloating() {
-                // BFS от потолка
                 let connected = new Set();
                 let queue = [];
                 if (grid[0]) {
@@ -425,7 +374,6 @@
                         if (!connected.has(key)) { connected.add(key); queue.push(n); }
                     });
                 }
-                // Удаляем всё, что не соединено
                 for (let r = 0; r < rows; r++) {
                     for (let c = 0; c < cols; c++) {
                         if (grid[r][c] && !connected.has(r + ',' + c)) {
@@ -465,9 +413,9 @@
             function endGame() {
                 state = 'END';
                 if (score > highScore) { highScore = score; localStorage.setItem('blini_hs', highScore); }
-                document.getElementById('pauseScore').innerText = score; 
+                document.getElementById('pauseScore').innerText = score;
                 document.getElementById('flavors-section').style.display = 'none';
-                document.getElementById('action-btn').innerText = "ЕЩЕ РАЗ";
+                document.getElementById('action-btn').innerText = "ПОПРОБОВАТЬ СНОВА";
                 toggleModal('modal', true);
             }
 
@@ -479,7 +427,7 @@
                 particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, RADIUS/3, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
 
                 if (state !== 'MENU') {
-                    // ТРАЕКТОРИЯ
+                    // ТРАЕКТОРИЯ (ПРОСТАЯ + ОТСКОК)
                     if (isAiming && !shooter.ball) {
                         ctx.beginPath();
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
@@ -571,7 +519,6 @@
             window.addEventListener('mousemove', e => { inputMove(getTouchPos(e)); });
             window.addEventListener('mouseup', inputEnd);
 
-            // UI
             document.getElementById('action-btn').onclick = initGame;
             document.getElementById('pauseBtn').onclick = (e) => {
                 e.stopPropagation();
