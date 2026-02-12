@@ -339,7 +339,6 @@
         const PANCAKE_IMAGES = ['honey.png', 'Strawberry.png', 'milk.png', 'cheese.png', 'meat.png'];
         const BOMB_IMAGE = 'bomb.png';
         
-        // Цвета (резерв)
         const PANCAKE_TYPES = [
             { color: '#FFC107', border: '#FF6F00' },
             { color: '#FF5252', border: '#B71C1C' },
@@ -349,7 +348,7 @@
         ];
         const BOMB_TYPE = 99;
 
-        // Загрузка
+        // Загрузка ресурсов
         let pancakeImgs = [];
         let bombImg = new Image();
         bombImg.src = BOMB_IMAGE;
@@ -366,14 +365,12 @@
         let aimAngle = -Math.PI / 2;
         let soundEnabled = true;
 
-        // === ЗВУК (Фикс для iOS) ===
+        // === ЗВУК ===
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
         function tryResumeAudio() {
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
         
         function playTone(freq, type, duration) {
@@ -399,7 +396,7 @@
             miss: () => playTone(150, 'triangle', 0.3)
         };
 
-        // === РАЗМЕРЫ ===
+        // === РАЗМЕРЫ И АДАПТИВ ===
         function resize() {
             const rect = container.getBoundingClientRect();
             canvas.width = rect.width;
@@ -453,21 +450,25 @@
             // Шар
             if (shooter.ball) {
                 let b = shooter.ball;
-                const steps = 6; // Больше шагов для точности
+                const steps = 6;
                 for (let i = 0; i < steps; i++) {
                     b.x += b.vx / steps;
                     b.y += b.vy / steps;
 
+                    // Отскок от стен
                     if (b.x < RADIUS) { b.x = RADIUS; b.vx *= -1; }
                     if (b.x > canvas.width - RADIUS) { b.x = canvas.width - RADIUS; b.vx *= -1; }
                     
+                    // Потолок
                     if (b.y < RADIUS) { b.y = RADIUS; snapBall(b); return; }
+                    
+                    // Столкновение с блинами
                     if (checkCollision(b)) return;
                 }
                 if (b.y > canvas.height + RADIUS) resetShot();
             }
 
-            // Эффекты
+            // Анимации
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx; p.y += p.vy; p.life -= 0.03; p.vy += 0.5;
@@ -488,7 +489,7 @@
                     let cell = grid[r]?.[c];
                     if (cell) {
                         let distSq = (b.x - cell.x)**2 + (b.y - cell.y)**2;
-                        if (distSq < (DIAMETER * 0.9)**2) { // 0.9 чувствительность
+                        if (distSq < (DIAMETER * 0.9)**2) {
                             snapBall(b);
                             return true;
                         }
@@ -630,19 +631,63 @@
             toggleModal('modal', true);
         }
 
+        // === ОТРИСОВКА (С УЛУЧШЕННЫМ ПРИЦЕЛОМ) ===
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Блины на поле
             for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (grid[r]?.[c]) drawPancake(grid[r][c].x, grid[r][c].y, grid[r][c].type);
+            
+            // 2. Падающие
             falling.forEach(f => { ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); drawPancake(0, 0, f.type); ctx.restore(); });
+            
+            // 3. Частицы
             particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, RADIUS/3, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; });
 
             if (state !== 'MENU') {
+                // === НОВАЯ ТРАЕКТОРИЯ ===
                 if (isAiming && !shooter.ball) {
-                    ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 4; ctx.setLineDash([10, 10]);
-                    ctx.moveTo(shooter.x, shooter.y);
-                    ctx.lineTo(shooter.x + Math.cos(aimAngle)*canvas.height, shooter.y + Math.sin(aimAngle)*canvas.height);
-                    ctx.stroke(); ctx.setLineDash([]);
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.lineWidth = 4;
+                    ctx.setLineDash([10, 15]); // Пунктир
+
+                    // Симуляция полета для линии
+                    let simX = shooter.x;
+                    let simY = shooter.y;
+                    let simAngle = aimAngle;
+                    // Вектор движения
+                    let simVx = Math.cos(simAngle) * 15;
+                    let simVy = Math.sin(simAngle) * 15;
+                    
+                    ctx.moveTo(simX, simY);
+
+                    // Делаем 40 шагов предсказания
+                    for(let i=0; i<40; i++) {
+                        simX += simVx;
+                        simY += simVy;
+
+                        // Отскок от стен в симуляции
+                        if (simX < RADIUS || simX > canvas.width - RADIUS) {
+                            simVx = -simVx; 
+                            simX += simVx; // Вернем чуть назад, чтобы не застрять
+                        }
+
+                        // Проверка коллизии с сеткой в симуляции
+                        let r = Math.floor((simY - RADIUS) / DIAMETER);
+                        let c = Math.round((simX - offsetX - RADIUS) / DIAMETER);
+                        if (r >= 0 && r < rows && c >= 0 && c < cols && grid[r]?.[c]) {
+                            break; // Линия упирается в блин
+                        }
+                        if (simY < RADIUS) break; // Линия упирается в потолок
+
+                        ctx.lineTo(simX, simY);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
                 }
+                
+                // Стрелок и следующий шар
                 if (!shooter.ball) drawPancake(shooter.x, shooter.y, shooter.curr);
                 else drawPancake(shooter.ball.x, shooter.ball.y, shooter.ball.type);
                 
@@ -673,20 +718,13 @@
 
         function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-        // === ГЛАВНОЕ ИСПРАВЛЕНИЕ: ОТДЕЛЬНОЕ УПРАВЛЕНИЕ ДЛЯ TOUCH И MOUSE ===
-        
-        // Универсальная функция получения координат
+        // === УПРАВЛЕНИЕ ===
         function getTouchPos(e) {
             const rect = canvas.getBoundingClientRect();
-            // Если это Touch событие
-            if (e.touches && e.touches.length > 0) {
-                return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-            }
-            // Если это Mouse событие
+            if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
             return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         }
 
-        // Общая логика старта
         function inputStart(pos) {
             tryResumeAudio();
             if (state !== 'PLAYING' || shooter.ball) return;
@@ -694,7 +732,6 @@
             inputMove(pos);
         }
 
-        // Общая логика движения
         function inputMove(pos) {
             if (!isAiming) return;
             let dx = pos.x - shooter.x;
@@ -703,12 +740,8 @@
             aimAngle = Math.atan2(dy, dx);
         }
 
-        // Общая логика выстрела
         function inputEnd() {
-            if (isAiming) {
-                isAiming = false;
-                fire();
-            }
+            if (isAiming) { isAiming = false; fire(); }
         }
 
         function fire() {
@@ -716,35 +749,14 @@
             shooter.ball = { x: shooter.x, y: shooter.y, type: shooter.curr, vx: Math.cos(aimAngle) * SPEED, vy: Math.sin(aimAngle) * SPEED };
         }
 
-        // --- ОБРАБОТЧИКИ TOUCH (ТЕЛЕФОН) ---
-        canvas.addEventListener('touchstart', e => {
-            e.preventDefault(); // Блокирует зум и скролл
-            inputStart(getTouchPos(e));
-        }, {passive: false});
-
-        canvas.addEventListener('touchmove', e => {
-            e.preventDefault();
-            inputMove(getTouchPos(e));
-        }, {passive: false});
-
-        // touchend на канвасе
-        canvas.addEventListener('touchend', e => {
-            e.preventDefault();
-            inputEnd();
-        });
-
-        // --- ОБРАБОТЧИКИ MOUSE (КОМПЬЮТЕР) ---
-        canvas.addEventListener('mousedown', e => {
-            inputStart(getTouchPos(e));
-        });
-
-        window.addEventListener('mousemove', e => {
-            inputMove(getTouchPos(e));
-        });
-
+        canvas.addEventListener('touchstart', e => { e.preventDefault(); inputStart(getTouchPos(e)); }, {passive: false});
+        canvas.addEventListener('touchmove', e => { e.preventDefault(); inputMove(getTouchPos(e)); }, {passive: false});
+        canvas.addEventListener('touchend', e => { e.preventDefault(); inputEnd(); });
+        canvas.addEventListener('mousedown', e => { inputStart(getTouchPos(e)); });
+        window.addEventListener('mousemove', e => { inputMove(getTouchPos(e)); });
         window.addEventListener('mouseup', inputEnd);
 
-        // --- UI ---
+        // UI
         document.getElementById('action-btn').onclick = initGame;
         document.getElementById('pauseBtn').onclick = (e) => {
             e.stopPropagation();
@@ -774,4 +786,5 @@
 </script>
 </body>
 </html>
+
 
